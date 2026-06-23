@@ -25,6 +25,12 @@ export class Agent {
   private provider: ReturnType<typeof createOpenAILLMProvider>;
   private workspaceRoot: string;
   private tools: ToolRegistry;
+  /**
+   * 本 Agent 会话内已 read 过的文件路径集合(规范化绝对路径)。
+   * 由 FileReadTool 写入;FileEditTool / FileWriteTool 读取做前置校验。
+   * 故意不存 mtime/content,仅作 bool 标记。
+   */
+  private readFileState: Set<string> = new Set();
 
   constructor(definition: AgentDefinition, config: AgentConfig, workspaceRoot: string, extraTools?: ITool[]) {
     this.definition = definition;
@@ -49,6 +55,11 @@ export class Agent {
   /** 获取工具注册表（只读访问） */
   getToolRegistry(): Readonly<ToolRegistry> {
     return this.tools;
+  }
+
+  /** 暴露 readFileState 给外部只读访问(测试/调试用) */
+  getReadFileState(): ReadonlySet<string> {
+    return this.readFileState;
   }
 
   /** 执行单次对话，自动多轮 + 工具调用 */
@@ -346,7 +357,10 @@ export class Agent {
       .join(', ');
     log.info(`Tool call: ${tool.type}${keyParams ? ` (${keyParams})` : ''}`);
     const startMs = Date.now();
-    const result = await impl.execute(tool.params, { workspaceRoot: this.workspaceRoot });
+    const result = await impl.execute(tool.params, {
+      workspaceRoot: this.workspaceRoot,
+      readFileState: this.readFileState,
+    });
     log.info(`Tool done: ${tool.type} (${Date.now() - startMs}ms, ${result.length} chars)`);
     return result;
   }

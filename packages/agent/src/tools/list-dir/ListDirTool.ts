@@ -1,8 +1,8 @@
 import { readdirSync } from 'fs';
-import * as path from 'path';
 import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } from '../../types/tool';
 import { createLogger } from '../../logger';
 import { LOG_CATEGORY } from '../../log-categories';
+import { resolvePath } from '../_shared/path';
 import {
   LIST_DIR_TOOL_NAME,
   LIST_DIR_TOOL_DESCRIPTION,
@@ -23,14 +23,6 @@ const annotations: ToolAnnotations = {
   readOnlyHint: true,
   idempotentHint: true,
 };
-
-function resolvePath(root: string, target: string): string {
-  const abs = path.resolve(root, target);
-  if (!abs.startsWith(root + path.sep) && abs !== root) {
-    throw new Error(`Path traversal not allowed: ${target}`);
-  }
-  return abs;
-}
 
 export class ListDirTool implements ITool {
   readonly name = LIST_DIR_TOOL_NAME;

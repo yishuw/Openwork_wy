@@ -33,6 +33,16 @@ export interface ToolAnnotations {
 /** 工具执行上下文 */
 export interface ToolExecutionContext {
   workspaceRoot: string;
+  /**
+   * 本会话内已 read 过的文件路径集合(规范化后的绝对路径)。
+   * FileEditTool / FileWriteTool 用它做前置校验——
+   * 任何对**已存在**文件的写入都必须先 read,否则拒写。
+   *
+   * 故意只存路径不存 mtime/content:
+   * 这只是"会话内是否读过这个 path"的 bool 标记,
+   * 不引入 staleness 校验。
+   */
+  readFileState?: Set<string>;
 }
 
 /** 工具接口 —— 内置工具和 MCP 工具的统一契约 */

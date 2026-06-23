@@ -1,8 +1,9 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, existsSync } from 'fs';
 import * as path from 'path';
 import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } from '../../types/tool';
 import { createLogger } from '../../logger';
 import { LOG_CATEGORY } from '../../log-categories';
+import { resolveKey } from '../_shared/path';
 import {
   FILE_WRITE_TOOL_NAME,
   FILE_WRITE_TOOL_DESCRIPTION,
@@ -30,14 +31,6 @@ const annotations: ToolAnnotations = {
   openWorldHint: false,
 };
 
-function resolvePath(root: string, target: string): string {
-  const abs = path.resolve(root, target);
-  if (!abs.startsWith(root + path.sep) && abs !== root) {
-    throw new Error(`Path traversal not allowed: ${target}`);
-  }
-  return abs;
-}
-
 export class FileWriteTool implements ITool {
   readonly name = FILE_WRITE_TOOL_NAME;
   readonly description = FILE_WRITE_TOOL_DESCRIPTION;
@@ -53,11 +46,26 @@ export class FileWriteTool implements ITool {
     // body 内容由 parser 注入到 params.content,这里保证它是字符串(空串也是合法)
     const content = params.content ?? '';
 
+    let absPath: string;
+    let pathKey: string;
     try {
-      const absPath = resolvePath(context.workspaceRoot, target);
-      const existed = existsSync(absPath);
-      const oldBytes = existed ? readFileSync(absPath, 'utf-8').length : 0;
+      const r = resolveKey(context.workspaceRoot, target);
+      absPath = r.absPath;
+      pathKey = r.key;
+    } catch (e: any) {
+      return `Error writing ${target}: ${e.message}`;
+    }
 
+    const existed = existsSync(absPath);
+
+    // 前置校验:覆盖已存在文件必须先 read_file。
+    // 新建文件不需要 read(没有内容可读)。
+    if (existed && !context.readFileState?.has(pathKey)) {
+      log.warn(`file_write refused: existing file not read before overwrite`, { path: target });
+      return `Error: "${target}" already exists — you must call \`read_file\` on it before overwriting with file_write. Read it first, then retry. (For brand-new files, file_write works without a prior read.)`;
+    }
+
+    try {
       // 确保父目录存在
       const parent = path.dirname(absPath);
       if (!existsSync(parent)) {
@@ -66,6 +74,10 @@ export class FileWriteTool implements ITool {
 
       writeFileSync(absPath, content, 'utf-8');
 
+      // 写完后登记到 readFileState:LLM 自己刚写的内容当然"知道",
+      // 后续对同一文件的 edit/write 不应再被前置校验挡住。
+      context.readFileState?.add(pathKey);
+
       const newBytes = Buffer.byteLength(content, 'utf-8');
       const newLines = content === '' ? 0 : content.split('\n').length;
       const kind = existed ? 'overwritten' : 'created';
@@ -73,12 +85,11 @@ export class FileWriteTool implements ITool {
       log.info(`file_write ${kind}: ${newBytes} bytes, ${newLines} lines, ${Date.now() - startMs}ms`, {
         path: target,
         kind,
-        oldBytes,
         newBytes,
         newLines,
       });
 
-      return `## File ${kind}: ${target}\n- size: ${newBytes} bytes\n- lines: ${newLines}${existed ? `\n- previous size: ${oldBytes} bytes (overwritten)` : ''}`;
+      return `## File ${kind}: ${target}\n- size: ${newBytes} bytes\n- lines: ${newLines}`;
     } catch (e: any) {
       log.warn(`file_write failed: ${e.message}`, { path: target, error: e.message });
       return `Error writing ${target}: ${e.message}`;
