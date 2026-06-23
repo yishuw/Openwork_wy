@@ -2,7 +2,6 @@ import { ref } from 'vue';
 import { createAgentService } from '../services/agentService';
 import type { AgentConfig, StreamEvent } from '../services/agentService';
 import type { ProviderConfig } from './useLLMSettings';
-import type { ParsedEdit } from '../services/editParser';
 import { useEditorStore } from '../stores/editor';
 import { getEditorInstance } from '../services/editorInstance';
 import { webAgentLog } from '../services/logger';
@@ -32,9 +31,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   thinking?: string;
-  edits?: { path: string; content: string }[];
   timestamp: number;
-  editOperations?: ParsedEdit[];
   blocks?: MessageBlock[];
   /** @deprecated 使用 blocks 替代 */
   toolNodes?: ToolCallNode[];
@@ -100,7 +97,6 @@ export function useAgent(sessionId?: string) {
   const isProcessing = ref(false);
   const config = ref<AgentConfig>({ mode: 'build' });
   const service = createAgentService();
-  const lastEdits = ref<ParsedEdit[]>([]);
   const toolStatus = ref<string>('');
   const thinkingActive = ref(false);
   let activeAbortController: AbortController | null = null;
@@ -110,15 +106,6 @@ export function useAgent(sessionId?: string) {
       ...config.value,
       providerId: provider?.id || undefined,
     };
-  }
-
-  function extractEdits(msg: ChatMessage) {
-    if (config.value.mode === 'build') {
-      if (msg.edits && msg.edits.length > 0) {
-        msg.editOperations = msg.edits;
-        lastEdits.value = msg.edits;
-      }
-    }
   }
 
   async function sendMessage(content: string, provider?: ProviderConfig | null, activeFilePath?: string) {
@@ -141,7 +128,6 @@ export function useAgent(sessionId?: string) {
       }, buildRequestConfig(provider));
 
       const msg: ChatMessage = { ...response };
-      extractEdits(msg);
       messages.value.push(msg);
     } catch (e: any) {
       messages.value.push({
@@ -169,7 +155,6 @@ export function useAgent(sessionId?: string) {
     };
     messages.value.push(userMsg);
 
-    lastEdits.value = [];
     toolStatus.value = '';
     thinkingActive.value = false;
 
@@ -320,14 +305,9 @@ export function useAgent(sessionId?: string) {
         },
         { signal }
       );
-
-      const msg = messages.value.find(m => m.id === assistantMsgId);
-      if (msg) {
-        if (response.edits && response.edits.length > 0) {
-          msg.edits = response.edits;
-        }
-        extractEdits(msg);
-      }
+      // 编辑已下沉为 agent 内建工具(FileWriteTool/FileEditTool),在循环内直接落盘。
+      // response 仅含 content + timestamp,而 content 已通过 onChunk 流式写入 assistantMsg,
+      // 故此处无需再处理 response。
     } catch (e: any) {
       webAgentLog.error(`streamMessage error: ${e.name} ${e.message}`, { name: e.name, message: e.message });
       if (e.name === 'AbortError') {
@@ -364,7 +344,6 @@ export function useAgent(sessionId?: string) {
 
   function clearMessages() {
     messages.value = [];
-    lastEdits.value = [];
     toolStatus.value = '';
     thinkingActive.value = false;
   }
@@ -377,5 +356,5 @@ export function useAgent(sessionId?: string) {
     config.value.mode = mode;
   }
 
-  return { messages, isProcessing, config, lastEdits, toolStatus, thinkingActive, sendMessage, streamMessage, cancelStream, clearMessages, restoreMessages, setMode };
+  return { messages, isProcessing, config, toolStatus, thinkingActive, sendMessage, streamMessage, cancelStream, clearMessages, restoreMessages, setMode };
 }

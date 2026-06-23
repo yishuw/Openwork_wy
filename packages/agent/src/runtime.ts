@@ -1,15 +1,11 @@
 import type { AgentConfig, AgentContext, SessionMessage } from './types/agent';
 import type { IAgentFileSystem } from './types/filesystem';
-import type { AgentEditResult } from './types/message';
 import type { McpServerEntry, McpConfig } from './mcp/config';
 import type { ITool } from './types/tool';
-import type { ExecutionResult } from './executor';
 import { Agent } from './agent';
 import { Session, type SessionEvent } from './session';
 import { McpManager } from './mcp/manager';
-import { createOpenAILLMProvider, buildMessages } from './openai-client';
-import { executeEdits } from './executor';
-import { parseEditsFromText, type ParsedEdit } from './parser';
+import { createOpenAILLMProvider, buildMessages } from './llm/openai-client';
 import { createLogger } from './logger';
 
 const log = createLogger('AgentRuntime');
@@ -33,7 +29,6 @@ export interface AgentRuntimeConfig {
 export interface ChatResult {
   content: string;
   turns: number;
-  edits: ParsedEdit[];
   toolCalls: { type: string; params: Record<string, string> }[];
 }
 
@@ -51,20 +46,18 @@ const DEFAULT_SYSTEM_PROMPT = [
   'You are an autonomous coding agent. Your goal is to understand, plan, and execute code changes.',
   '',
   '## Making Changes',
-  'To modify or create a file, output an edit block with the exact file path:',
-  '',
-  '<edit path="src/components/Example.tsx">',
-  '// FULL file content here — include every line, not just the diff',
-  '</edit>',
-  '',
-  'The path must be a real file path from the project tree. Never use placeholder paths like "path/to/file".',
+  'Use the file tools directly — do NOT emit <edit> blocks:',
+  '- `file_write` for creating new files or full rewrites (body = complete file content).',
+  '- `file_edit` for targeted string replacements (use <old>/<new> child tags to send the diff).',
+  '- `read_file` to load a file before editing it (edits without a prior read will fail).',
   '',
   '## Rules',
-  '1. Read files before editing them',
-  '2. Make focused, minimal changes',
-  '3. In <edit> blocks, provide COMPLETE file content, not partial diffs',
-  '4. Think step by step: explore → plan → execute → explain',
-  '5. Only output <edit> blocks when the user explicitly asks for file changes',
+  '1. Read files before editing them.',
+  '2. Make focused, minimal changes — prefer `file_edit` over `file_write` for small modifications.',
+  '3. When using `file_write`, the body is the COMPLETE file content.',
+  '4. When using `file_edit`, the <old> text must match EXACTLY (whitespace included) and be unique in the file.',
+  '5. Think step by step: explore → plan → execute → explain.',
+  '6. Only invoke file tools when the user explicitly asks for file changes.',
 ].join('\n');
 
 export class AgentRuntime {
@@ -174,7 +167,6 @@ export class AgentRuntime {
     const result = await session.start(message, context);
     return this.buildResult(result.mainResult.content, result.mainResult.turns, result.mainResult.toolCalls);
   }
-
   async chatStream(
     message: string,
     context: AgentContext,
@@ -224,10 +216,6 @@ export class AgentRuntime {
       emit({ type: 'error', error: e.message || String(e) });
       throw e;
     }
-  }
-
-  async applyEdits(edits: AgentEditResult[]): Promise<ExecutionResult> {
-    return executeEdits(this.fs, edits);
   }
 
   get mcpStatus(): { serverCount: number; toolCount: number } {
@@ -317,15 +305,11 @@ export class AgentRuntime {
     turns: number,
     toolCalls: { type: string; params: Record<string, string> }[]
   ): ChatResult {
-    const hasEditTag = /<edit\s/i.test(content);
-    const edits = parseEditsFromText(content);
-    if (hasEditTag) {
-      log.info(`Content has <edit> tag, parsed ${edits.length} edit(s): ${edits.map(e => e.path).join(', ') || '(none)'}`);
-    }
+    // 编辑能力已下沉到 FileWriteTool / FileEditTool,在 agent 循环内直接落盘。
+    // 这里不再扫描 <edit> 块;ChatResult 也不再携带 edits 字段。
     return {
       content,
       turns,
-      edits,
       toolCalls,
     };
   }

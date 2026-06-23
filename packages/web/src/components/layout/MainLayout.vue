@@ -173,7 +173,7 @@
       </div>
       <div v-if="activeRightPanel" class="right-resize-handle" @mousedown="startRightPanelResize"></div>
       <div v-if="activeRightPanel" class="right-sidebar" :style="{ width: rightPanelWidth + 'px' }">
-        <AgentPanel v-if="activeRightPanel === 'agent'" @apply-edits="handleApplyEdits" @undo-edits="undoLastEdits" @open-settings="handleOpenSettings('ai')" />
+        <AgentPanel v-if="activeRightPanel === 'agent'" @open-settings="handleOpenSettings('ai')" />
         <McpSettingsPanel v-else-if="activeRightPanel === 'mcp'" />
       </div>
       <RightToolbar
@@ -282,7 +282,6 @@ import { NTabs, NTabPane, NIcon, NButton, NModal, NText } from 'naive-ui';
 import { useEditorStore } from '../../stores/editor';
 import { useFileSystem } from '../../composables/useFileSystem';
 import { getEditorInstance } from '../../services/editorInstance';
-import type { ParsedEdit } from '../../services/editParser';
 import { useWindowResize } from '../../composables/useWindowResize';
 import type { ResizeEdge } from '../../composables/useWindowResize';
 import { useFileTreeContextMenu } from '../../composables/useFileTreeContextMenu';
@@ -543,33 +542,10 @@ async function checkWorkspaceDuplicate(path: string): Promise<boolean> {
   });
 }
 
-// ===== Agent 编辑快照（用于撤销） =====
-const editSnapshots = ref<Map<string, string>>(new Map());
-const lastEditedFiles = ref<string[]>([]);
-
-/** 撤销 Agent 最近一次的所有编辑 */
-async function undoLastEdits() {
-  if (lastEditedFiles.value.length === 0) return;
-
-  for (const filePath of lastEditedFiles.value) {
-    const original = editSnapshots.value.get(filePath);
-    if (original !== undefined) {
-      try {
-        await fs.client.writeFile(filePath, original);
-        const tab = store.tabs.find(t => t.path === filePath);
-        if (tab) {
-          store.updateContent(tab.id, original);
-          store.saveTab(tab.id);
-        }
-      } catch (e: any) {
-        webFileLog.error(`Failed to undo edit for ${filePath}: ${(e as Error).message}`);
-      }
-    }
-  }
-
-  editSnapshots.value.clear();
-  lastEditedFiles.value = [];
-}
+// ===== Agent 编辑能力说明 =====
+// 编辑已下沉为 agent 内建工具(FileWriteTool/FileEditTool),在 agent 循环内直接落盘。
+// 此处不再保留 editSnapshots / lastEditedFiles / handleApplyEdits / undoLastEdits:
+// 原先基于 <edit> 块的"应用编辑/撤销"链路已彻底移除。
 
 /** 切换侧边栏折叠状态 */
 function toggleSidebar() {
@@ -1198,61 +1174,6 @@ function startRightPanelResize(e: MouseEvent) {
   window.addEventListener('mousemove', onMove, true);
   window.addEventListener('mouseup', onUp, true);
   window.addEventListener('blur', onUp);
-}
-
-/**
- * 应用 Agent 生成的编辑操作
- *
- * 对每个编辑：
- * 1. 解析文件路径（LLM 生成相对路径，需拼接 workspaceRoot）
- * 2. 备份原内容（供撤销使用）
- * 3. 写入新内容
- * 4. 更新已打开的标签页或自动打开新标签
- * 5. 刷新文件树
- */
-async function handleApplyEdits(edits: ParsedEdit[]) {
-  editSnapshots.value.clear();
-  lastEditedFiles.value = [];
-
-  for (const edit of edits) {
-    try {
-      // LLM 基于文件树生成相对路径（如 packages/web/src/App.vue）
-      // 仅当 workspaceRoot 为真实绝对路径时才作为前缀拼接
-      const root = store.workspaceRoot;
-      const isRealPath = root && (root.startsWith('/') || /^[A-Z]:[\\/]/i.test(root));
-      const resolvedPath = edit.path.startsWith('/') || edit.path.includes(':')
-        ? edit.path
-        : isRealPath
-          ? root.replace(/[\/\\]?$/, '/') + edit.path
-          : edit.path;
-
-      // 备份原始内容
-      try {
-        const original = await fs.client.readFile(resolvedPath);
-        editSnapshots.value.set(resolvedPath, original);
-      } catch {
-        // 新文件，无需备份
-      }
-      lastEditedFiles.value.push(resolvedPath);
-
-      await fs.client.writeFile(resolvedPath, edit.content);
-
-      // openFile 内部使用 pathsMatch 处理相对/绝对路径混用，不会创建重复标签
-      store.openFile(resolvedPath, edit.content);
-      store.updateContent(store.activeTabId!, edit.content);
-      store.saveTab(store.activeTabId!);
-
-      // 刷新文件树以反映变化
-      if (store.fileTreeNodes.length > 0) {
-        fs.loadDirectory('.').catch(() => {});
-      }
-    } catch (e: any) {
-      fs.error = `Edit failed: ${edit.path} - ${e.message}`;
-    }
-  }
-
-  // 持久化标签页状态（Agent 编辑可能打开或更新了标签页）
-  fs.persistWorkspaceState();
 }
 </script>
 

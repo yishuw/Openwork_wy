@@ -3,7 +3,7 @@ import type { ITool } from './types/tool';
 import { ToolRegistry } from './tool-registry';
 import { createDefaultTools } from './tools/index';
 import { parseToolCalls, type ParsedTool } from './parser';
-import { createOpenAILLMProvider } from './openai-client';
+import { createOpenAILLMProvider } from './llm/openai-client';
 import { createLogger } from './logger';
 
 const log = createLogger('Agent');
@@ -119,11 +119,16 @@ export class Agent {
         break;
       }
 
-      const parsedTools = parseToolCalls(response, this.tools.getTagNames());
+      const parsedTools = parseToolCalls(response, this.tools);
 
       if (parsedTools.length > 0) {
         let textBefore = response;
         for (const t of parsedTools) {
+          // 同时剔除自闭合和带 body 的标签,避免把工具语法塞回对话上下文
+          textBefore = textBefore.replace(
+            new RegExp(`<${t.type}(\\s[^>]*?)?>[\\s\\S]*?<\\/${t.type}\\s*>`, 'g'),
+            '',
+          );
           textBefore = textBefore.replace(new RegExp(`<${t.type}[^>]*\\/>`, 'g'), '');
         }
         textBefore = textBefore.trim();
@@ -145,7 +150,7 @@ export class Agent {
 
           messages.push({
             role: 'assistant',
-            content: `<${tool.type} ${Object.entries(tool.params).map(([k, v]) => `${k}="${v}"`).join(' ')}/>`,
+            content: this.serializeToolCall(tool),
           });
           messages.push({ role: 'user', content: `Tool result:\n${result}` });
         }
@@ -266,7 +271,7 @@ export class Agent {
         break;
       }
 
-      const parsedTools = parseToolCalls(response, this.tools.getTagNames());
+      const parsedTools = parseToolCalls(response, this.tools);
 
       if (parsedTools.length > 0) {
         fullContent += response;
@@ -283,7 +288,7 @@ export class Agent {
 
           messages.push({
             role: 'assistant',
-            content: `<${tool.type} ${Object.entries(tool.params).map(([k, v]) => `${k}="${v}"`).join(' ')}/>`,
+            content: this.serializeToolCall(tool),
           });
           messages.push({ role: 'user', content: `Tool result:\n${result}` });
         }
@@ -344,5 +349,37 @@ export class Agent {
     const result = await impl.execute(tool.params, { workspaceRoot: this.workspaceRoot });
     log.info(`Tool done: ${tool.type} (${Date.now() - startMs}ms, ${result.length} chars)`);
     return result;
+  }
+
+  /**
+   * 把一次工具调用序列化为可放回对话历史的字符串。
+   * 仅用于 assistant 消息展示,LLM 不需要原样复用它。
+   * - 自闭合工具:`<read_file path="..."/>`
+   * - 带大段 content body:`<file_write path="..."><content>...</content></file_write>`
+   *   (用 <content> 包裹避免大文本里出现 " 而无法走 attribute 路径)
+   * - 带子标签 body:`<file_edit path="..."><old>...</old><new>...</new></file_edit>`
+   */
+  private serializeToolCall(tool: ParsedTool): string {
+    const bodyMode = this.tools.getBodyMode(tool.type);
+    const attrs = Object.entries(tool.params)
+      .filter(([k]) => {
+        // content 模式下 content 走 body;children 模式下子标签参数走 body
+        if (bodyMode === 'content' && k === 'content') return false;
+        if (bodyMode === 'children') return false;
+        return true;
+      })
+      .map(([k, v]) => `${k}="${v.replace(/"/g, '&quot;')}"`)
+      .join(' ');
+
+    if (bodyMode === 'content') {
+      return `<${tool.type}${attrs ? ' ' + attrs : ''}>${tool.params.content ?? ''}</${tool.type}>`;
+    }
+    if (bodyMode === 'children') {
+      const children = Object.entries(tool.params)
+        .map(([k, v]) => `<${k}>${v}</${k}>`)
+        .join('\n');
+      return `<${tool.type}${attrs ? ' ' + attrs : ''}>\n${children}\n</${tool.type}>`;
+    }
+    return `<${tool.type}${attrs ? ' ' + attrs : ''}/>`;
   }
 }

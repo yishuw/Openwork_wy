@@ -1,7 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { AgentRuntime, type AgentRuntimeConfig, type AgentRuntimeEvent, type AgentContext, type AgentEditResult } from '@vibeeditor/agent';
-import { LocalFileSystem } from '../fs/local';
-import { executeEdits } from '@vibeeditor/agent';
+import { AgentRuntime, type AgentRuntimeConfig, type AgentRuntimeEvent, type AgentContext } from '@vibeeditor/agent';
 import { createLogger } from '@vibeeditor/agent';
 import { loadEnabledMcpServers } from './mcp';
 import type { WorkspaceManager } from '../workspace/manager';
@@ -167,11 +165,10 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
         undefined,  // signal — not used in SSE path currently
         sessionId || 'default'
       );
-      if (result.edits.length > 0) {
-        reqLog.info(`Sending ${result.edits.length} edit(s) via SSE`);
-      }
+      // 编辑已下沉为 FileWriteTool / FileEditTool,在 agent 循环内直接落盘,
+      // done 事件不再携带 edits 字段。toolCalls 数量仍用于统计展示。
       reqLog.info(`Stream done: ${Date.now() - startMs}ms, ${result.content.length} chars, ${result.toolCalls.length} tool calls`);
-      writeSSE({ done: true, edits: result.edits, toolCalls: result.toolCalls.length });
+      writeSSE({ done: true, toolCalls: result.toolCalls.length });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       reqLog.error(`Stream error: ${msg}`);
@@ -186,29 +183,9 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
     }
   });
 
-  router.post('/apply-edits', async (req: Request, res: Response) => {
-    try {
-      const { rootPath, edits } = req.body;
-
-      if (!rootPath || !edits) {
-        res.status(400).json({ error: 'rootPath and edits are required' });
-        return;
-      }
-
-      if (!Array.isArray(edits) || edits.length === 0) {
-        res.status(400).json({ error: 'edits must be a non-empty array' });
-        return;
-      }
-
-      const fs = new LocalFileSystem(rootPath);
-      const result = await executeEdits(fs, edits as AgentEditResult[]);
-
-      res.json(result);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: msg });
-    }
-  });
+  // /apply-edits 路由已移除:编辑能力已下沉到内建工具 FileWriteTool / FileEditTool,
+  // 在 Agent 循环内直接完成落盘。前端无需再调用此端点,Agent 返回的 ChatResult.edits
+  // 仅用于展示"曾输出过 <edit> 块"的历史兼容信息(若 LLM 仍输出该格式)。
 
   return router;
 }

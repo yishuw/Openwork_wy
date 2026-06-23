@@ -177,18 +177,6 @@
                 </div>
               </div>
             </template>
-
-            <!-- 编辑摘要节点 -->
-            <div v-if="msg.editOperations && msg.editOperations.length > 0" class="tl-node tl-edit">
-              <div class="tl-dot tl-dot-edit"></div>
-              <div class="tl-body">
-                <div class="tl-edit-summary">
-                  <span>{{ msg.editOperations.length }}{{ $t('agent.filesModified') }}</span>
-                  <span v-for="e in msg.editOperations" :key="e.path" class="tl-edit-file">{{ e.path }}</span>
-                  <button class="tl-undo-btn" @click="emit('undo-edits')">{{ $t('agent.undo') }}</button>
-                </div>
-              </div>
-            </div>
           </div>
 
           <!-- 系统消息（错误等） -->
@@ -258,7 +246,6 @@ import { useLLMSettings } from '../../composables/useLLMSettings';
 import { useEditorStore } from '../../stores/editor';
 import { renderMarkdown } from '../../services/markdown';
 import type { ChatMessage } from '../../composables/useAgent';
-import type { ParsedEdit } from '../../services/editParser';
 import ModeSelector from './ModeSelector.vue';
 import ProviderSelect from './ProviderSelect.vue';
 import { webAgentLog } from '../../services/logger';
@@ -267,8 +254,6 @@ import { SettingsOutline, FolderOpenOutline, AddOutline } from '@vicons/ionicons
 const props = defineProps<{}>();
 
 const emit = defineEmits<{
-  'apply-edits': [edits: ParsedEdit[]]
-  'undo-edits': []
   'open-settings': []
 }>();
 
@@ -428,10 +413,8 @@ async function send() {
 
   sessionStore.saveCurrentSession();
 
-  if (agent.lastEdits.value.length > 0) {
-    emit('apply-edits', [...agent.lastEdits.value]);
-    agent.lastEdits.value = [];
-  }
+  // 编辑已下沉为 agent 内建工具(FileWriteTool/FileEditTool),在循环内直接落盘。
+  // 此处不再 emit 'apply-edits';文件变化通过 ws/file-watcher 或 fs.loadDirectory 刷新。
 
   scheduleScroll(true);
 }
