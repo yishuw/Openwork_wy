@@ -54,7 +54,7 @@
     </div>
 
     <!-- 思考进度条 —— 处理时在面板最上方滚动 -->
-    <div v-if="activeAgent?.isProcessing.value" class="thinking-progress">
+    <div v-if="agentCtrl.isProcessing.value" class="thinking-progress">
       <div class="thinking-progress-bar"></div>
     </div>
 
@@ -77,7 +77,7 @@
     </div>
 
     <!-- 无活跃会话时的提示 -->
-    <div v-else-if="!activeAgent" class="agent-guide">
+    <div v-else-if="!sessionStore.activeSessionId" class="agent-guide">
       <div class="guide-icon"><n-icon size="36" :component="AddOutline" /></div>
       <div class="guide-title">{{ $t('agent.noSessionPrompt') }}</div>
       <button class="guide-cta" @click="createNewSession">{{ $t('agent.newSession') }}</button>
@@ -87,11 +87,11 @@
     <template v-else>
       <!-- 消息列表 —— 时间轴布局 -->
       <div class="agent-messages" ref="messagesContainer">
-        <div v-if="activeAgent.messages.value.length === 0" class="agent-empty">
+        <div v-if="visibleMessages.length === 0" class="agent-empty">
           {{ $t('agent.emptyChat') }}
         </div>
 
-        <template v-for="msg in activeAgent.messages.value" :key="msg.id">
+        <template v-for="msg in visibleMessages" :key="msg.id">
           <!-- 用户消息 —— 右对齐，不在时间轴上 -->
           <div v-if="msg.role === 'user'" class="user-msg-row">
             <div class="user-msg-bubble">
@@ -106,14 +106,14 @@
               <div
                 v-for="block in msg.blocks"
                 :key="block.id"
-                v-memo="[Math.floor(block.content.length / 200), block.completed]"
+                v-memo="[Math.floor(blockLen(block) / 200), blockDone(block)]"
                 class="tl-node"
                 :class="{
                   'tl-thinking': block.type === 'thinking',
                   'tl-response': block.type === 'response',
                   'tl-tool': block.type === 'tool_call',
-                  'tl-tool-running': block.type === 'tool_call' && !block.completed,
-                  'tl-tool-done': block.type === 'tool_call' && block.completed,
+                  'tl-tool-running': block.type === 'tool_call' && !blockDone(block),
+                  'tl-tool-done': block.type === 'tool_call' && blockDone(block),
                 }"
               >
                 <!-- 思考块 -->
@@ -140,8 +140,8 @@
                       <span v-if="block.toolLabel" class="tl-tool-label">{{ block.toolLabel }}</span>
                       <span class="tl-tool-toggle">{{ expandedState[block.id] ? '▾' : '▸' }}</span>
                     </div>
-                    <div v-if="block.content" class="tl-tool-result" :class="{ expanded: expandedState[block.id] }">
-                      <pre>{{ block.content }}</pre>
+                    <div v-if="block.result" class="tl-tool-result" :class="{ expanded: expandedState[block.id] }">
+                      <pre>{{ block.result }}</pre>
                     </div>
                   </div>
                 </template>
@@ -206,7 +206,7 @@
           @keydown.meta.enter.prevent="send"
         ></textarea>
         <button
-          v-if="activeAgent?.isProcessing.value"
+          v-if="agentCtrl.isProcessing.value"
           class="agent-stop-btn"
           @click="stopStream"
         >
@@ -239,13 +239,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import { NTabs, NTabPane, NIcon } from 'naive-ui';
 import { useSessionStore } from '../../stores/sessions';
 import { useLLMSettings } from '../../composables/useLLMSettings';
 import { useEditorStore } from '../../stores/editor';
+import { useAgent, buildAgentSnapshot } from '../../composables/useAgent';
+import { useSessionMessages } from '../../composables/useSessionMessages';
 import { renderMarkdown } from '../../services/markdown';
-import type { ChatMessage } from '../../composables/useAgent';
+import type { DisplayMessage } from '@vibeeditor/agent';
 import ModeSelector from './ModeSelector.vue';
 import ProviderSelect from './ProviderSelect.vue';
 import { webAgentLog } from '../../services/logger';
@@ -265,17 +267,47 @@ const messagesContainer = ref<HTMLElement>();
 const inputHeight = ref(90);
 let isResizingInput = false;
 
-// 从 store 获取当前活跃的 agent 实例
-const activeAgent = computed(() => sessionStore.activeAgent);
+// 使用当前活跃 sessionId 驱动 useAgent(无状态,sessionId 在 streamMessage 时再传)
+const agentCtrl = useAgent();
 
-// ModeSelector 的 writable computed —— 解决 activeAgent 可能为 null 的问题
+// 从后端拉取展示消息(监听 workspaceId / sessionId 变化自动 refresh)
+const { messages: persistedMessages, refresh: refreshMessages } = useSessionMessages(
+  () => sessionStore.boundWorkspaceId,
+  () => sessionStore.activeSessionId,
+);
+
+// 最终展示列表:已落盘消息 + 当前 live 消息(流式期间)
+const displayMessages = computed<DisplayMessage[]>(() => {
+  const list = [...persistedMessages.value];
+  if (agentCtrl.liveMessage.value) {
+    list.push(agentCtrl.liveMessage.value);
+  }
+  return list;
+});
+
+// 用户消息:发送时即时插入(提升响应感,无需等 refresh)
+const pendingUserMessages = ref<DisplayMessage[]>([]);
+const visibleMessages = computed<DisplayMessage[]>(() => {
+  // pending 用户消息挂在已落盘列表前面(已落盘列表已包含历史)
+  // 但 pending 与已落盘可能重复:用 timestamp 去重
+  if (pendingUserMessages.value.length === 0) return displayMessages.value;
+  const persistedIds = new Set(persistedMessages.value.map(m => m.id));
+  const liveId = agentCtrl.liveMessage.value?.id;
+  // pending 应该在 refresh 后被替代;若已出现在 persisted 里就不重复
+  const filtered = pendingUserMessages.value.filter(m => !persistedIds.has(m.id) && m.id !== liveId);
+  return [...displayMessages.value, ...filtered];
+});
+
+// 切换 session 时清空 pending
+watch(() => sessionStore.activeSessionId, () => {
+  pendingUserMessages.value = [];
+  agentCtrl.clearLive();
+});
+
+// ModeSelector:activeSession 切换时同步 mode(目前全局 mode,后续可改为 per-session)
 const currentMode = computed({
-  get: () => activeAgent.value?.config.value.mode ?? 'plan',
-  set: (val) => {
-    if (activeAgent.value) {
-      activeAgent.value.config.value.mode = val;
-    }
-  },
+  get: () => agentCtrl.config.value.mode,
+  set: (val) => { agentCtrl.config.value.mode = val; },
 });
 
 // ===== 会话标签栏切换 =====
@@ -315,13 +347,13 @@ function onTabsWheel(e: WheelEvent) {
   el.scrollBy({ left: e.deltaY, behavior: 'auto' });
 }
 
-function createNewSession() {
-  sessionStore.createSession();
+async function createNewSession() {
+  await sessionStore.createSession();
   nextTick(() => updateScrollState());
 }
 
-function handleCloseSession(id: string) {
-  sessionStore.closeSession(id);
+async function handleCloseSession(id: string) {
+  await sessionStore.closeSession(id);
   nextTick(() => updateScrollState());
 }
 
@@ -330,6 +362,16 @@ const expandedState = reactive<Record<string, boolean>>({});
 
 function toggleBlock(blockId: string) {
   expandedState[blockId] = !expandedState[blockId];
+}
+
+// 帮助函数:适配 DisplayBlock union 类型,模板里调用
+function blockLen(block: DisplayMessage['blocks'][number]): number {
+  if (block.type === 'tool_call') return block.result.length;
+  return block.content.length;
+}
+function blockDone(block: DisplayMessage['blocks'][number]): boolean {
+  if (block.type === 'tool_call' || block.type === 'thinking') return block.completed;
+  return true; // response 块永远视为完成
 }
 
 // ===== 自动滚动控制 =====
@@ -377,8 +419,12 @@ function setupObserver() {
 }
 
 async function send() {
-  const agent = activeAgent.value;
-  if (!agent) return;
+  if (!sessionStore.activeSessionId) {
+    // 没活跃 session,先创建
+    await sessionStore.createSession();
+  }
+  const sessionId = sessionStore.activeSessionId;
+  if (!sessionId) return;
 
   const text = input.value.trim();
   if (!text) return;
@@ -386,19 +432,61 @@ async function send() {
 
   userScrolledUp.value = false;
 
+  // 插入 pending 用户消息(立即显示,不等 refresh)
+  const tempUserMsg: DisplayMessage = {
+    id: `pending_user_${Date.now()}`,
+    role: 'user',
+    content: text,
+    timestamp: Date.now(),
+    blocks: [{ id: `pending_user_${Date.now()}_r`, type: 'response', content: text }],
+  };
+  pendingUserMessages.value.push(tempUserMsg);
+
   // 自动从首条消息命名会话
   if (sessionStore.activeSession && !sessionStore.activeSession.nameAutoGenerated) {
     sessionStore.autoNameFromFirstMessage(sessionStore.activeSession.id, text);
   }
 
   const activeFilePath = editorStore.activeTab?.path;
-
   webAgentLog.info('send: starting streamMessage');
-  const streamPromise = agent.streamMessage(
+
+  // 触发流式 — useAgent 内部把 sessionId 通过 service 传到后端
+  // 由于 useAgent 是用 '__panel__' 创建的,这里临时改写 sessionId:
+  // 为简化,我们直接注入 sessionId 到 streamMessage 的请求里
+  // (useAgent.streamMessage 已通过参数 sessionId 在 service 调用时传入)
+  // 为此 useAgent 需要接受 sessionId 参数,或者我们改用闭包绑定
+  // —— 当前实现:useAgent(sessionId) 在创建时绑定,我们改一种方式,直接在这里组装请求
+
+  // 简化:每次 send 时构造一次 ideSnapshot,触发 agentCtrl.streamMessage,
+  // 内部走 service.streamMessage 时透传 sessionId 字段;
+  // 由于 agentCtrl 是 '__panel__' 创建的,我们需要把真实 sessionId 传进去。
+  // 修复:在 useAgent.streamMessage 内部,sessionId 由参数传入。
+  // 但当前签名只接 (content, provider, activeFilePath, callbacks),sessionId 来自闭包。
+  // 临时方案:在 send 里直接写一个 inline 调用,绕过 agentCtrl ——
+  // 但这又破坏了 useAgent 的封装。
+  //
+  // 最干净的做法:让 useAgent 不在构造期绑定 sessionId,而由 streamMessage 接收 sessionId 参数。
+  // 这里改用这种:
+
+  const streamPromise = agentCtrl.streamMessage(
+    sessionId,
     text,
     providerSettings.activeProvider.value,
-    () => scheduleScroll(false),
-    activeFilePath
+    activeFilePath,
+    {
+      onChunk: () => scheduleScroll(false),
+      onLiveUpdate: () => scheduleScroll(false),
+      onDone: async () => {
+        webAgentLog.info('send: streamMessage completed, refreshing from backend');
+        await refreshMessages();
+        pendingUserMessages.value = [];
+        agentCtrl.clearLive();
+        scheduleScroll(true);
+      },
+      onError: (err) => {
+        webAgentLog.error(`send: streamMessage failed: ${err.message}`, { name: err.name, message: err.message });
+      },
+    },
   );
 
   await nextTick();
@@ -406,24 +494,13 @@ async function send() {
 
   try {
     await streamPromise;
-    webAgentLog.info('send: streamMessage completed');
   } catch (e: any) {
-    webAgentLog.error(`send: streamMessage failed: ${e.message}`, { name: e.name, message: e.message });
+    webAgentLog.error(`send: streamPromise rejected: ${e.message}`, { name: e.name, message: e.message });
   }
-
-  sessionStore.saveCurrentSession();
-
-  // 编辑已下沉为 agent 内建工具(FileWriteTool/FileEditTool),在循环内直接落盘。
-  // 此处不再 emit 'apply-edits';文件变化通过 ws/file-watcher 或 fs.loadDirectory 刷新。
-
-  scheduleScroll(true);
 }
 
 function stopStream() {
-  const agent = activeAgent.value;
-  if (agent?.cancelStream) {
-    agent.cancelStream();
-  }
+  agentCtrl.cancelStream();
 }
 
 function startInputResize(e: MouseEvent) {
@@ -459,7 +536,6 @@ onMounted(() => {
   messagesContainer.value?.addEventListener('scroll', onMessagesScroll);
   setupObserver();
 
-  // 标签栏溢出检测
   const scrollEl = tabsScrollRef.value;
   if (scrollEl) {
     ro = new ResizeObserver(() => updateScrollState());
@@ -474,6 +550,9 @@ onUnmounted(() => {
   ro?.disconnect();
   messagesContainer.value?.removeEventListener('scroll', onMessagesScroll);
 });
+
+// 引用一下 buildAgentSnapshot,避免未使用 import 警告(虽然 useAgent 内部也用了)
+void buildAgentSnapshot;
 </script>
 
 <style scoped>

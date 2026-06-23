@@ -22,6 +22,23 @@ export type { ITool } from './types/tool';
 // -- 工具调用解析（编辑能力已下沉为 FileWriteTool / FileEditTool,不再有独立的 edits 路径） --
 export { parseToolCalls, type ParsedTool } from './parser';
 
+// -- 记忆模块(SessionMemory + 类型) --
+export { SessionMemory } from './memory';
+export type {
+  MemoryEntry,
+  ToolCallRecord,
+  AgentRole,
+  IDESnapshot,
+  LLMMessage,
+  DisplayMessage,
+  DisplayBlock,
+  DisplayToolBlock,
+  DisplayThinkingBlock,
+  DisplayResponseBlock,
+  SerializedSessionMemory,
+} from './memory';
+export { CHARS_PER_TOKEN, DEFAULT_MEMORY_TOKEN_BUDGET } from './memory';
+
 // -- MCP 配置类型 --
 export type {
   StdioServerConfig,

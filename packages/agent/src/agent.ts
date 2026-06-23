@@ -1,12 +1,14 @@
-import type { AgentDefinition, AgentContext, AgentResult, AgentConfig } from './types/agent';
+import type { AgentDefinition, AgentResult, AgentConfig } from './types/agent';
 import type { ITool } from './types/tool';
+import type { LLMMessage, ToolCallRecord } from './memory';
 import { ToolRegistry } from './tool-registry';
 import { createDefaultTools } from './tools/index';
 import { parseToolCalls, type ParsedTool } from './parser';
 import { createOpenAILLMProvider } from './llm/openai-client';
 import { createLogger } from './logger';
+import { LOG_CATEGORY } from './log-categories';
 
-const log = createLogger('Agent');
+const log = createLogger(LOG_CATEGORY.AGENT);
 
 /** Agent 运行事件 */
 export interface AgentEvent {
@@ -17,6 +19,9 @@ export interface AgentEvent {
 }
 
 export type AgentEventCallback = (event: AgentEvent) => void;
+
+/** 工具调用回调 — Agent 每完成一次工具调用通过此回调上报给 Session 写入 memory */
+export type ToolCallReportCallback = (toolCall: ToolCallRecord) => void;
 
 const DEFAULT_MAX_TURNS = 15;
 
@@ -62,57 +67,39 @@ export class Agent {
     return this.readFileState;
   }
 
-  /** 执行单次对话，自动多轮 + 工具调用 */
+  /** 工具用法 text (供 Session 拼 system 段用) */
+  getToolsSection(): string {
+    return this.tools.buildSystemPromptSection();
+  }
+
+  /** 系统提示词(供 Session 拼 system 段用) */
+  getSystemPrompt(): string {
+    return this.definition.systemPrompt;
+  }
+
+  getWorkspaceRoot(): string {
+    return this.workspaceRoot;
+  }
+
+  /**
+   * 执行单次对话，自动多轮 + 工具调用。
+   *
+   * 与旧版的关键差异:
+   * - 入参 messages 已由 SessionMemory.projectToLLMMessages 构造好,Agent 不再自己拼装 system/IDE/history
+   * - 工具调用通过 onToolCall 回调上报给 Session,Session 写入 memory;Agent 不再自己拼 fullContent
+   * - 返回的 AgentResult.toolCalls 仅作为统计返回,真正的结构化记录走回调
+   */
   async execute(
-    message: string,
-    context: AgentContext,
-    onEvent?: AgentEventCallback
+    messages: LLMMessage[],
+    onEvent?: AgentEventCallback,
+    onToolCall?: ToolCallReportCallback
   ): Promise<AgentResult> {
     const emit = (e: AgentEvent) => onEvent?.(e);
     const maxTurns = this.definition.maxTurns ?? DEFAULT_MAX_TURNS;
 
-    const messages: { role: string; content: string }[] = [];
-    messages.push({ role: 'system', content: this.definition.systemPrompt });
-
-    // 附加已注册工具的用法说明（含动态注册的 MCP 工具）
-    const toolsSection = this.tools.buildSystemPromptSection();
-    if (toolsSection) {
-      messages.push({ role: 'system', content: toolsSection });
-    }
-
-    messages.push({ role: 'system', content: `## Workspace Root\n${this.workspaceRoot}` });
-
-    if (context.openFiles?.length) {
-      const parts = ['## Currently Open Files'];
-      for (const f of context.openFiles) {
-        parts.push(`\n### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``);
-      }
-      messages.push({ role: 'system', content: parts.join('\n') });
-    }
-
-    if (context.fileTree?.length) {
-      messages.push({ role: 'system', content: '## Project File Tree\n' + context.fileTree.join('\n') });
-    }
-
-    if (context.cursorPosition) {
-      messages.push({
-        role: 'system',
-        content: `Cursor at ${context.cursorPosition.file}:${context.cursorPosition.line}:${context.cursorPosition.column}`,
-      });
-    }
-
-    if (context.selection?.text) {
-      messages.push({
-        role: 'system',
-        content: `Selected text in ${context.selection.file} (lines ${context.selection.startLine}-${context.selection.endLine}):\n\`\`\`\n${context.selection.text}\n\`\`\``,
-      });
-    }
-
-    for (const m of context.conversationHistory || []) {
-      messages.push({ role: m.role, content: m.content });
-    }
-
-    messages.push({ role: 'user', content: message });
+    // Agent 内部维护一份本地 messages(含本轮工具往返)
+    // 入参 messages 是 read-only,这里 clone 一份用于本轮追加
+    const localMessages: { role: string; content: string }[] = messages.map(m => ({ ...m }));
 
     const executeStartMs = Date.now();
     let fullContent = '';
@@ -122,7 +109,7 @@ export class Agent {
     for (let turn = 0; turn < maxTurns; turn++) {
       turns = turn + 1;
       const turnStartMs = Date.now();
-      const response = await this.provider.chat(messages);
+      const response = await this.provider.chat(localMessages);
 
       if (!response) {
         emit({ type: 'done' });
@@ -135,7 +122,6 @@ export class Agent {
       if (parsedTools.length > 0) {
         let textBefore = response;
         for (const t of parsedTools) {
-          // 同时剔除自闭合和带 body 的标签,避免把工具语法塞回对话上下文
           textBefore = textBefore.replace(
             new RegExp(`<${t.type}(\\s[^>]*?)?>[\\s\\S]*?<\\/${t.type}\\s*>`, 'g'),
             '',
@@ -153,24 +139,33 @@ export class Agent {
           toolCalls.push(tool);
           emit({ type: 'tool_start', toolType: tool.type, toolLabel: tool.params.path || tool.params.pattern || '' });
 
-          const result = await this.executeTool(tool);
+          const { result, durationMs } = await this.executeToolTimed(tool);
 
           emit({ type: 'tool_result', toolType: tool.type, text: result });
           fullContent += `\n**[Tool: ${tool.type}]**\n${result}\n`;
           emit({ type: 'tool_end', toolType: tool.type });
 
-          messages.push({
+          // 上报给 Session 写入 memory
+          onToolCall?.({
+            type: tool.type,
+            params: { ...tool.params },
+            result,
+            durationMs,
+            agentId: this.definition.id,
+          });
+
+          localMessages.push({
             role: 'assistant',
             content: this.serializeToolCall(tool),
           });
-          messages.push({ role: 'user', content: `Tool result:\n${result}` });
+          localMessages.push({ role: 'user', content: `Tool result:\n${result}` });
         }
 
         log.info(`Turn ${turns}/${maxTurns}: ${parsedTools.length} tool(s), ${Date.now() - turnStartMs}ms`, {
           agentId: this.definition.id,
           turn: turns,
           tools: parsedTools.map(t => t.type),
-          messages: messages.length,
+          messages: localMessages.length,
         });
 
         continue;
@@ -203,59 +198,19 @@ export class Agent {
 
   /** 执行流式对话，自动多轮 + 工具调用 */
   async executeStream(
-    message: string,
-    context: AgentContext,
+    messages: LLMMessage[],
     onEvent?: AgentEventCallback,
+    onToolCall?: ToolCallReportCallback,
     signal?: AbortSignal
   ): Promise<AgentResult> {
     const emit = (e: AgentEvent) => onEvent?.(e);
     const maxTurns = this.definition.maxTurns ?? DEFAULT_MAX_TURNS;
 
-    const messages: { role: string; content: string }[] = [];
-    messages.push({ role: 'system', content: this.definition.systemPrompt });
-
-    // 附加已注册工具的用法说明（含动态注册的 MCP 工具）
-    const toolsSection = this.tools.buildSystemPromptSection();
-    if (toolsSection) {
-      messages.push({ role: 'system', content: toolsSection });
-    }
-
-    messages.push({ role: 'system', content: `## Workspace Root\n${this.workspaceRoot}` });
-
-    if (context.openFiles?.length) {
-      const parts = ['## Currently Open Files'];
-      for (const f of context.openFiles) {
-        parts.push(`\n### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``);
-      }
-      messages.push({ role: 'system', content: parts.join('\n') });
-    }
-
-    if (context.fileTree?.length) {
-      messages.push({ role: 'system', content: '## Project File Tree\n' + context.fileTree.join('\n') });
-    }
-
-    if (context.cursorPosition) {
-      messages.push({
-        role: 'system',
-        content: `Cursor at ${context.cursorPosition.file}:${context.cursorPosition.line}:${context.cursorPosition.column}`,
-      });
-    }
-
-    if (context.selection?.text) {
-      messages.push({
-        role: 'system',
-        content: `Selected text in ${context.selection.file} (lines ${context.selection.startLine}-${context.selection.endLine}):\n\`\`\`\n${context.selection.text}\n\`\`\``,
-      });
-    }
-
-    for (const m of context.conversationHistory || []) {
-      messages.push({ role: m.role, content: m.content });
-    }
-
-    messages.push({ role: 'user', content: message });
+    const localMessages: { role: string; content: string }[] = messages.map(m => ({ ...m }));
 
     const executeStartMs = Date.now();
     let fullContent = '';
+    let thinkingContent = '';
     const toolCalls: { type: string; params: Record<string, string> }[] = [];
     let turns = 0;
 
@@ -268,13 +223,20 @@ export class Agent {
       turns = turn + 1;
       const turnStartMs = Date.now();
 
-      const response = await this.provider.chatStream(messages, (type, text) => {
+      // 每轮开始前重置 thinking 累积(每轮独立的 thinking)
+      let turnThinking = '';
+
+      const response = await this.provider.chatStream(localMessages, (type, text) => {
         if (type === 'thinking') {
+          turnThinking += text;
           emit({ type: 'thinking', text });
         } else if (type === 'content') {
           emit({ type: 'chunk', text });
         }
       });
+
+      // 累加 thinking 内容到整轮
+      if (turnThinking) thinkingContent += turnThinking;
 
       if (!response) {
         emit({ type: 'done' });
@@ -291,30 +253,37 @@ export class Agent {
           toolCalls.push(tool);
           emit({ type: 'tool_start', toolType: tool.type, toolLabel: tool.params.path || tool.params.pattern || '' });
 
-          const result = await this.executeTool(tool);
+          const { result, durationMs } = await this.executeToolTimed(tool);
 
           emit({ type: 'tool_result', toolType: tool.type, text: result });
           fullContent += `\n\n**[Tool: ${tool.type}]**\n${result}\n`;
           emit({ type: 'tool_end', toolType: tool.type });
 
-          messages.push({
+          onToolCall?.({
+            type: tool.type,
+            params: { ...tool.params },
+            result,
+            durationMs,
+            agentId: this.definition.id,
+          });
+
+          localMessages.push({
             role: 'assistant',
             content: this.serializeToolCall(tool),
           });
-          messages.push({ role: 'user', content: `Tool result:\n${result}` });
+          localMessages.push({ role: 'user', content: `Tool result:\n${result}` });
         }
 
         log.info(`Turn ${turns}/${maxTurns}: ${parsedTools.length} tool(s), ${Date.now() - turnStartMs}ms`, {
           agentId: this.definition.id,
           turn: turns,
           tools: parsedTools.map(t => t.type),
-          messages: messages.length,
+          messages: localMessages.length,
         });
 
         continue;
       }
 
-      // 对于没有工具调用的最终轮次，内容已经在流式回调中发射过了
       fullContent += response;
       if (fullContent.length > 50000) {
         emit({ type: 'chunk', text: '\n\n*[响应过长，已截断]*' });
@@ -329,11 +298,10 @@ export class Agent {
       break;
     }
 
-    const hasEdit = /<edit\s/i.test(fullContent);
-    log.info(`executeStream done: ${fullContent.length} chars, hasEdit=${hasEdit}, turns=${turns}, ${toolCalls.length} tool calls, ${Date.now() - executeStartMs}ms`, {
+    log.info(`executeStream done: ${fullContent.length} chars, thinking=${thinkingContent.length} chars, turns=${turns}, ${toolCalls.length} tool calls, ${Date.now() - executeStartMs}ms`, {
       agentId: this.definition.id,
       contentLen: fullContent.length,
-      hasEdit,
+      thinkingLen: thinkingContent.length,
       turns,
       toolCalls: toolCalls.length,
     });
@@ -342,14 +310,16 @@ export class Agent {
       content: fullContent,
       turns,
       toolCalls,
+      thinking: thinkingContent,
     };
   }
 
-  private async executeTool(tool: ParsedTool): Promise<string> {
+  /** 执行工具并计时,返回结果与耗时 */
+  private async executeToolTimed(tool: ParsedTool): Promise<{ result: string; durationMs: number }> {
     const impl = this.tools.get(tool.type);
     if (!impl) {
       log.warn(`Unknown tool: ${tool.type}`);
-      return `Unknown tool: ${tool.type}`;
+      return { result: `Unknown tool: ${tool.type}`, durationMs: 0 };
     }
     const keyParams = Object.entries(tool.params)
       .filter(([, v]) => v)
@@ -361,8 +331,9 @@ export class Agent {
       workspaceRoot: this.workspaceRoot,
       readFileState: this.readFileState,
     });
-    log.info(`Tool done: ${tool.type} (${Date.now() - startMs}ms, ${result.length} chars)`);
-    return result;
+    const durationMs = Date.now() - startMs;
+    log.info(`Tool done: ${tool.type} (${durationMs}ms, ${result.length} chars)`);
+    return { result, durationMs };
   }
 
   /**
@@ -377,7 +348,6 @@ export class Agent {
     const bodyMode = this.tools.getBodyMode(tool.type);
     const attrs = Object.entries(tool.params)
       .filter(([k]) => {
-        // content 模式下 content 走 body;children 模式下子标签参数走 body
         if (bodyMode === 'content' && k === 'content') return false;
         if (bodyMode === 'children') return false;
         return true;

@@ -1,5 +1,6 @@
 import { i18n } from '../locales';
 import { webAgentLog } from './logger';
+import type { IDESnapshot } from '@vibeeditor/agent';
 
 declare const __SERVER_PORT__: number;
 
@@ -17,6 +18,7 @@ export interface AgentConfig {
   systemPrompt?: string;
   temperature?: number;
   maxTokens?: number;
+  memoryTokenBudget?: number;
 }
 
 /** 对话消息 */
@@ -24,6 +26,7 @@ export interface AgentMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  thinking?: string;
   timestamp: number;
 }
 
@@ -34,15 +37,35 @@ export interface StreamEvent {
   content?: string;
 }
 
+/** 流式请求 body —— 与 server 端 StreamRequestBody 对齐 */
+export interface StreamRequestBody {
+  message: string;
+  ideSnapshot?: IDESnapshot;
+  workspaceRoot?: string;
+  workspaceId?: string;
+  sessionId?: string;
+  config?: AgentConfig;
+}
+
 export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
   return {
-    async sendMessage(message: string, context: Record<string, unknown>, config: AgentConfig): Promise<AgentMessage> {
-      const body: Record<string, unknown> = { message, context, config };
-      if (context.sessionId) body.sessionId = context.sessionId;
+    async sendMessage(
+      message: string,
+      body: Partial<StreamRequestBody>,
+      config: AgentConfig,
+    ): Promise<AgentMessage> {
+      const fullBody: StreamRequestBody = {
+        message,
+        ideSnapshot: body.ideSnapshot,
+        workspaceRoot: body.workspaceRoot,
+        workspaceId: body.workspaceId,
+        sessionId: body.sessionId,
+        config,
+      };
       const res = await fetch(`${baseUrl}/api/agent/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(fullBody),
       });
       if (!res.ok) throw new Error(`${i18n.global.t('errors.apiError')}: ${res.status}`);
       return res.json();
@@ -50,26 +73,24 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
 
     async streamMessage(
       message: string,
-      context: Record<string, unknown>,
+      body: Partial<StreamRequestBody>,
       config: AgentConfig,
       onChunk: (type: 'thinking' | 'content', text: string) => void,
       onEvent?: (event: StreamEvent) => void,
-      options?: { signal?: AbortSignal }
+      options?: { signal?: AbortSignal },
     ): Promise<AgentMessage> {
-      const body: Record<string, unknown> = { message, context, config };
-      if (context.workspaceRoot) {
-        body.workspaceRoot = context.workspaceRoot;
-      }
-      if (context.workspaceId) {
-        body.workspaceId = context.workspaceId;
-      }
-      if (context.sessionId) {
-        body.sessionId = context.sessionId;
-      }
+      const fullBody: StreamRequestBody = {
+        message,
+        ideSnapshot: body.ideSnapshot,
+        workspaceRoot: body.workspaceRoot,
+        workspaceId: body.workspaceId,
+        sessionId: body.sessionId,
+        config,
+      };
       const res = await fetch(`${baseUrl}/api/agent/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(fullBody),
         signal: options?.signal,
       });
 
@@ -85,6 +106,7 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
 
       const decoder = new TextDecoder();
       let fullContent = '';
+      let fullThinking = '';
       let buffer = '';
       let thinkingActive = false;
 
@@ -112,7 +134,7 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
             } else if (data.tool_end && onEvent) {
               onEvent({ type: 'tool_end', message: data.tool_end });
             } else if (data.tool_result && onEvent) {
-              onEvent({ type: 'tool_result', content: data.tool_result });
+              onEvent({ type: 'tool_result', content: typeof data.tool_result === 'string' ? data.tool_result : (data.tool_result?.content || '') });
             }
 
             if (data.thinking) {
@@ -120,6 +142,7 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
                 thinkingActive = true;
                 if (onEvent) onEvent({ type: 'thinking_start' });
               }
+              fullThinking += data.thinking;
               onChunk('thinking', data.thinking);
             }
 
@@ -146,6 +169,7 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
         id: `agent_${Date.now()}`,
         role: 'assistant',
         content: fullContent,
+        thinking: fullThinking,
         timestamp: Date.now(),
       };
     },

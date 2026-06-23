@@ -210,5 +210,21 @@ export function createWorkspaceRouter(manager: WorkspaceManager, llmGateway: LLM
     }
   });
 
+  // 获取单个 session 的展示用消息列表(供前端 chat 面板渲染)
+  router.get('/sessions/:sessionId/messages', async (req: Request, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      const workspaceId = req.query.workspaceId as string;
+      if (!workspaceId || !sessionId) {
+        res.status(400).json({ error: 'workspaceId and sessionId are required' });
+        return;
+      }
+      const messages = manager.getSessionDisplayMessages(workspaceId, sessionId);
+      res.json({ messages });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   return router;
 }

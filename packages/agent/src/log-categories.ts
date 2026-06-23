@@ -43,6 +43,9 @@ export const LOG_CATEGORY = {
   /** Session：会话生命周期、子 Agent 委托 */
   SESSION: 'Session',
 
+  /** SessionMemory：记忆模块的写入、投影、持久化 */
+  MEMORY: 'Memory',
+
   /** 工作区：打开、关闭、持久化、会话保存 */
   WORKSPACE: 'Workspace',
 

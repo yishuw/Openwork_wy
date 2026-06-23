@@ -1,14 +1,18 @@
-import type { AgentConfig, AgentContext, SessionMessage } from './types/agent';
+import type { AgentConfig } from './types/agent';
 import type { IAgentFileSystem } from './types/filesystem';
 import type { McpServerEntry, McpConfig } from './mcp/config';
 import type { ITool } from './types/tool';
+import type { IDESnapshot, DisplayMessage, SerializedSessionMemory } from './memory';
+import { DEFAULT_MEMORY_TOKEN_BUDGET, SessionMemory } from './memory';
 import { Agent } from './agent';
 import { Session, type SessionEvent } from './session';
 import { McpManager } from './mcp/manager';
 import { createOpenAILLMProvider, buildMessages } from './llm/openai-client';
 import { createLogger } from './logger';
+import { LOG_CATEGORY } from './log-categories';
+import type { AgentContext } from './types/agent';
 
-const log = createLogger('AgentRuntime');
+const log = createLogger(LOG_CATEGORY.AGENT_RUNTIME);
 
 export interface AgentRuntimeConfig {
   mode: 'build' | 'plan';
@@ -24,12 +28,16 @@ export interface AgentRuntimeConfig {
   mcpServers?: McpServerEntry[];
   maxTurns?: number;
   fileSystem?: IAgentFileSystem;
+  /** 会话记忆的 token 预算(用于 LLM 历史滑窗);不设则用 DEFAULT_MEMORY_TOKEN_BUDGET */
+  memoryTokenBudget?: number;
 }
 
 export interface ChatResult {
   content: string;
   turns: number;
   toolCalls: { type: string; params: Record<string, string> }[];
+  /** 本次会话产生的 thinking 内容(若有) */
+  thinking?: string;
 }
 
 export interface AgentRuntimeEvent {
@@ -162,23 +170,34 @@ export class AgentRuntime {
     await this.initialize();
   }
 
-  async chat(message: string, context: AgentContext, sessionId = 'default'): Promise<ChatResult> {
+  /**
+   * 非流式 chat:build 模式走 Session+memory;plan 模式直连 LLM 不带记忆
+   */
+  async chat(
+    message: string,
+    payload: IDESnapshot | AgentContext,
+    sessionId = 'default'
+  ): Promise<ChatResult> {
     await this.initialize();
 
     if (this.agentConfig.mode === 'plan') {
+      // plan 模式保持原行为:不走 memory,直接 buildMessages
+      const context = payload as AgentContext;
       const provider = createOpenAILLMProvider(this.agentConfig);
       const messages = buildMessages(this.agentConfig, message, context);
       const content = await provider.chat(messages);
       return this.buildResult(content, 1, []);
     }
 
+    const ideSnapshot = payload as IDESnapshot;
     const session = this.getOrCreateSession(sessionId);
-    const result = await session.start(message, context);
-    return this.buildResult(result.mainResult.content, result.mainResult.turns, result.mainResult.toolCalls);
+    const result = await session.start(message, ideSnapshot);
+    return this.buildResult(result.mainResult.content, result.mainResult.turns, result.mainResult.toolCalls, result.mainResult.thinking);
   }
+
   async chatStream(
     message: string,
-    context: AgentContext,
+    payload: IDESnapshot | AgentContext,
     onEvent?: AgentRuntimeEventCallback,
     signal?: AbortSignal,
     sessionId = 'default'
@@ -186,9 +205,11 @@ export class AgentRuntime {
     await this.initialize();
 
     if (this.agentConfig.mode === 'plan') {
+      const context = payload as AgentContext;
       return this.runPlanStream(message, context, onEvent);
     }
 
+    const ideSnapshot = payload as IDESnapshot;
     const session = this.getOrCreateSession(sessionId);
 
     const emit = (e: AgentRuntimeEvent) => onEvent?.(e);
@@ -218,9 +239,9 @@ export class AgentRuntime {
     };
 
     try {
-      const result = await session.startStream(message, context, sessionEvent, signal);
+      const result = await session.startStream(message, ideSnapshot, sessionEvent, signal);
       emit({ type: 'done' });
-      return this.buildResult(result.mainResult.content, result.mainResult.turns, result.mainResult.toolCalls);
+      return this.buildResult(result.mainResult.content, result.mainResult.turns, result.mainResult.toolCalls, result.mainResult.thinking);
     } catch (e: any) {
       emit({ type: 'error', error: e.message || String(e) });
       throw e;
@@ -239,28 +260,44 @@ export class AgentRuntime {
     return this.fs;
   }
 
-  // ====================== Session 管理 ======================
+  // ====================== Session / Memory 管理 ======================
 
   private getOrCreateSession(sessionId: string): Session {
     let session = this.sessionMap.get(sessionId);
     if (!session) {
       const agent = this.createAgent();
-      session = new Session(sessionId, agent);
+      const memory = new SessionMemory(sessionId, this.config.memoryTokenBudget ?? DEFAULT_MEMORY_TOKEN_BUDGET);
+      session = new Session(sessionId, agent, memory);
       this.sessionMap.set(sessionId, session);
     }
     return session;
   }
 
-  getSessionMessages(sessionId: string): SessionMessage[] {
+  /** 返回展示用消息(给前端 GET 接口用) */
+  getSessionDisplayMessages(sessionId: string): DisplayMessage[] {
     const session = this.sessionMap.get(sessionId);
-    return session ? [...session.messages] : [];
+    return session ? session.memory.projectToDisplay() : [];
   }
 
-  restoreSession(sessionId: string, messages: SessionMessage[]): void {
+  /** 返回序列化的 memory(用于 workspace.json 持久化) */
+  serializeSessionMemory(sessionId: string): SerializedSessionMemory | null {
+    const session = this.sessionMap.get(sessionId);
+    return session ? session.memory.serialize() : null;
+  }
+
+  /** 用持久化数据恢复 session memory */
+  restoreSessionMemory(sessionId: string, data: unknown): void {
     const agent = this.createAgent();
-    const session = new Session(sessionId, agent);
-    session.messages = [...messages];
+    const memory = new SessionMemory(sessionId, this.config.memoryTokenBudget ?? DEFAULT_MEMORY_TOKEN_BUDGET);
+    memory.deserialize(data);
+    const session = new Session(sessionId, agent, memory);
     this.sessionMap.set(sessionId, session);
+  }
+
+  /** 调整已存在 session 的 token 预算(配置变更时用) */
+  setSessionTokenBudget(sessionId: string, budget: number): void {
+    const session = this.sessionMap.get(sessionId);
+    if (session) session.memory.setTokenBudget(budget);
   }
 
   getSessionIds(): string[] {
@@ -268,6 +305,8 @@ export class AgentRuntime {
   }
 
   deleteSession(sessionId: string): void {
+    const session = this.sessionMap.get(sessionId);
+    if (session) session.memory.clear();
     this.sessionMap.delete(sessionId);
   }
 
@@ -312,14 +351,14 @@ export class AgentRuntime {
   private buildResult(
     content: string,
     turns: number,
-    toolCalls: { type: string; params: Record<string, string> }[]
+    toolCalls: { type: string; params: Record<string, string> }[],
+    thinking?: string,
   ): ChatResult {
-    // 编辑能力已下沉到 FileWriteTool / FileEditTool,在 agent 循环内直接落盘。
-    // 这里不再扫描 <edit> 块;ChatResult 也不再携带 edits 字段。
     return {
       content,
       turns,
       toolCalls,
+      thinking,
     };
   }
 }

@@ -2,74 +2,45 @@ import { ref } from 'vue';
 import { createAgentService } from '../services/agentService';
 import type { AgentConfig, StreamEvent } from '../services/agentService';
 import type { ProviderConfig } from './useLLMSettings';
+import type { IDESnapshot, DisplayMessage } from '@vibeeditor/agent';
 import { useEditorStore } from '../stores/editor';
 import { getEditorInstance } from '../services/editorInstance';
 import { webAgentLog } from '../services/logger';
 
-/** Agent 运行上下文 —— 当前 IDE 环境快照 */
-export interface AgentContext {
-  openFiles: { path: string; content: string }[];
-  fileTree: string[];
-  cursorPosition?: { file: string; line: number; column: number };
-  selection?: { file: string; text: string; startLine: number; endLine: number };
-  conversationHistory: { id: string; role: string; content: string; timestamp: number }[];
-}
-
-/** 消息块 —— 按时间顺序记录助手消息中的每个阶段 */
-export interface MessageBlock {
-  id: string;
-  type: 'thinking' | 'response' | 'tool_call';
-  content: string;
-  toolType?: string;
-  toolLabel?: string;
-  completed: boolean;
-}
-
-/** 聊天消息 */
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  thinking?: string;
-  timestamp: number;
-  blocks?: MessageBlock[];
-  /** @deprecated 使用 blocks 替代 */
-  toolNodes?: ToolCallNode[];
-}
-
-/** 流式过程中的工具调用节点 */
-export interface ToolCallNode {
-  id: string;
-  toolType: string;
-  toolLabel: string;
-  result: string;
-  completed: boolean;
-}
-
-function collectFileTreePaths(entries: any[], basePath: string): string[] {
-  const paths: string[] = [];
-  for (const entry of entries) {
-    if (entry.isDirectory) continue;
-    const full = basePath ? `${basePath}/${entry.name}` : entry.name;
-    paths.push(full);
-  }
-  return paths;
-}
-
-function buildAgentContext(activeFilePath?: string): AgentContext {
+/**
+ * buildAgentSnapshot —— 从当前 IDE 状态构造 IDESnapshot。
+ *
+ * 与旧的 buildAgentContext 的关键差异:
+ * - 只发激活文件的完整内容;其他打开 tab 仅发路径列表
+ * - 不再带 conversationHistory(记忆完全由后端 SessionMemory 管)
+ */
+export function buildAgentSnapshot(activeFilePath?: string): IDESnapshot {
   const store = useEditorStore();
   const editor = getEditorInstance();
 
-  const openFiles = store.tabs.map(tab => ({
-    path: tab.path,
-    content: tab.content,
-  }));
+  // 激活文件内容(若有)
+  let activeFile: IDESnapshot['activeFile'] | undefined;
+  const activeTab = activeFilePath
+    ? store.tabs.find(t => t.path === activeFilePath)
+    : store.activeTab;
+  if (activeTab) {
+    activeFile = {
+      path: activeTab.path,
+      content: activeTab.content,
+    };
+  }
 
+  // 其他打开 tab 仅路径
+  const openFilePaths = store.tabs
+    .map(t => t.path)
+    .filter(p => p !== activeFile?.path);
+
+  // 文件树(扁平路径列表,与旧版一致)
   const fileTree = collectFileTreePaths(store.fileTreeNodes, '');
 
-  let cursorPosition: AgentContext['cursorPosition'];
-  let selection: AgentContext['selection'];
-
+  // 光标 / 选区
+  let cursorPosition: IDESnapshot['cursorPosition'];
+  let selection: IDESnapshot['selection'];
   if (editor) {
     const file = activeFilePath || '';
     const pos = editor.getPosition();
@@ -89,16 +60,47 @@ function buildAgentContext(activeFilePath?: string): AgentContext {
     }
   }
 
-  return { openFiles, fileTree, cursorPosition, selection, conversationHistory: [] };
+  return {
+    activeFile,
+    openFilePaths,
+    fileTree,
+    cursorPosition,
+    selection,
+  };
 }
 
-export function useAgent(sessionId?: string) {
-  const messages = ref<ChatMessage[]>([]);
+function collectFileTreePaths(entries: any[], basePath: string): string[] {
+  const paths: string[] = [];
+  for (const entry of entries) {
+    if (entry.isDirectory) continue;
+    const full = basePath ? `${basePath}/${entry.name}` : entry.name;
+    paths.push(full);
+  }
+  return paths;
+}
+
+/**
+ * Agent 流驱动器(无状态)。
+ *
+ * 不再持有 messages ref——展示消息由 useSessionMessages 从后端拉取。
+ * 这里只负责构造请求 → 触发流式 → 把 live 消息通过 onLiveUpdate 回调上抛给 UI 层。
+ *
+ * useAgent 不绑定 sessionId;sessionId 在 streamMessage 调用时显式传入,
+ * 同一个 useAgent 实例可复用于不同 session(只要不同时并发)。
+ *
+ * 用法(详见 AgentPanel):
+ *   const { streamMessage, cancelStream, isProcessing, liveMessage } = useAgent();
+ *   await streamMessage(sessionId, text, provider, activeFilePath, {
+ *     onChunk: () => scheduleScroll(),
+ *     onLiveUpdate: (msg) => { liveMsg.value = msg; },
+ *     onDone: () => sessionMessages.refresh(),
+ *   });
+ */
+export function useAgent() {
   const isProcessing = ref(false);
   const config = ref<AgentConfig>({ mode: 'build' });
   const service = createAgentService();
-  const toolStatus = ref<string>('');
-  const thinkingActive = ref(false);
+  const liveMessage = ref<DisplayMessage | null>(null);
   let activeAbortController: AbortController | null = null;
 
   function buildRequestConfig(provider?: ProviderConfig | null): AgentConfig {
@@ -108,119 +110,99 @@ export function useAgent(sessionId?: string) {
     };
   }
 
-  async function sendMessage(content: string, provider?: ProviderConfig | null, activeFilePath?: string) {
-    const userMsg: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      role: 'user',
-      content,
-      timestamp: Date.now(),
-    };
-    messages.value.push(userMsg);
-    isProcessing.value = true;
-    toolStatus.value = '';
-
-    try {
-      const ctx = buildAgentContext(activeFilePath);
-      const response = await service.sendMessage(content, {
-        ...ctx,
-        conversationHistory: messages.value.slice(0, -1),
-        sessionId,
-      }, buildRequestConfig(provider));
-
-      const msg: ChatMessage = { ...response };
-      messages.value.push(msg);
-    } catch (e: any) {
-      messages.value.push({
-        id: `msg_err_${Date.now()}`,
-        role: 'system',
-        content: `Error: ${e.message}`,
-        timestamp: Date.now(),
-      });
-    } finally {
-      isProcessing.value = false;
-    }
-  }
-
   async function streamMessage(
+    sessionId: string,
     content: string,
-    provider?: ProviderConfig | null,
-    onChunk?: () => void,
-    activeFilePath?: string
+    provider: ProviderConfig | null | undefined,
+    activeFilePath: string | undefined,
+    callbacks: {
+      onChunk?: () => void;
+      onLiveUpdate?: (msg: DisplayMessage | null) => void;
+      onDone?: () => void;
+      onError?: (err: Error) => void;
+    },
   ) {
-    const userMsg: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      role: 'user',
-      content,
-      timestamp: Date.now(),
-    };
-    messages.value.push(userMsg);
+    isProcessing.value = true;
 
-    toolStatus.value = '';
-    thinkingActive.value = false;
-
-    const assistantMsgId = `msg_${Date.now() + 1}`;
-    const assistantMsg: ChatMessage = {
-      id: assistantMsgId,
+    // live 消息初始化
+    const liveId = `live_${Date.now()}`;
+    liveMessage.value = {
+      id: liveId,
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
+      blocks: [],
+      live: true,
     };
-    messages.value.push(assistantMsg);
+    callbacks.onLiveUpdate?.(liveMessage.value);
 
-    isProcessing.value = true;
-
-    // Cancel any previous in-flight stream
+    // 取消上一个在途请求
     if (activeAbortController) {
       activeAbortController.abort();
     }
     activeAbortController = new AbortController();
     const signal = activeAbortController.signal;
 
-    // 流式过程中按顺序构建 blocks
-    let currentBlock: MessageBlock | null = null;
+    // 流式 block 状态机(同旧 useAgent,但更新的是 liveMessage 而非 messages 数组)
+    // 用 LiveBlock 显式类型,避免 TS control-flow 在赋值后误判类型窄化
+    type LiveBlock = DisplayMessage['blocks'][number];
+    let activeBlock: LiveBlock | null = null;
     let blockIdCounter = 0;
-    const nextBlockId = () => `blk_${assistantMsgId}_${blockIdCounter++}`;
+    const nextBlockId = () => `${liveId}_blk${blockIdCounter++}`;
 
     function finishBlock() {
-      if (currentBlock) {
-        currentBlock.completed = true;
-        currentBlock = null;
+      if (activeBlock) {
+        if (activeBlock.type === 'tool_call') activeBlock.completed = true;
+        if (activeBlock.type === 'thinking') activeBlock.completed = true;
+        activeBlock = null;
       }
     }
 
-    function ensureBlock(type: MessageBlock['type'], toolType?: string, toolLabel?: string) {
-      if (currentBlock && currentBlock.type === type && !currentBlock.completed) return;
+    function pushBlock(b: LiveBlock) {
+      activeBlock = b;
+      liveMessage.value?.blocks.push(b);
+    }
+
+    function ensureResponseBlock() {
+      if (activeBlock && activeBlock.type === 'response') return;
       finishBlock();
-      currentBlock = {
+      pushBlock({ id: nextBlockId(), type: 'response', content: '' });
+    }
+
+    function ensureThinkingBlock() {
+      if (activeBlock && activeBlock.type === 'thinking') return;
+      finishBlock();
+      pushBlock({ id: nextBlockId(), type: 'thinking', content: '', completed: false });
+    }
+
+    function startToolCallBlock(toolType: string, toolLabel: string) {
+      finishBlock();
+      pushBlock({
         id: nextBlockId(),
-        type,
-        content: '',
+        type: 'tool_call',
         toolType,
         toolLabel,
+        params: {},
+        result: '',
+        durationMs: 0,
         completed: false,
-      };
-      const msg = messages.value.find(m => m.id === assistantMsgId);
-      if (msg) {
-        if (!msg.blocks) msg.blocks = [];
-        msg.blocks.push(currentBlock);
-      }
+      });
     }
 
-    // 内容缓冲：每 50ms 刷新一次，减少响应式更新和 markdown 渲染频率
+    // 内容缓冲(50ms,与旧版一致,降低 markdown 重渲染频率)
     const contentBuffer: string[] = [];
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     const FLUSH_INTERVAL = 50;
-
     function flushContent() {
       if (contentBuffer.length === 0) return;
       const text = contentBuffer.join('');
       contentBuffer.length = 0;
-      if (currentBlock) {
-        currentBlock.content += text;
+      if (activeBlock && activeBlock.type === 'response') {
+        activeBlock.content += text;
       }
-      if (onChunk) onChunk();
+      if (liveMessage.value) liveMessage.value.content += text;
+      callbacks.onChunk?.();
     }
-
     function scheduleFlush() {
       if (flushTimer) return;
       flushTimer = setTimeout(() => { flushTimer = null; flushContent(); }, FLUSH_INTERVAL);
@@ -228,109 +210,85 @@ export function useAgent(sessionId?: string) {
 
     try {
       const store = useEditorStore();
-      const ctx = buildAgentContext(activeFilePath);
-      const history = messages.value.slice(0, -1).filter(m => m.id !== assistantMsgId);
+      const ideSnapshot = buildAgentSnapshot(activeFilePath);
 
-      const streamCtx = {
-        ...ctx,
-        conversationHistory: history,
-        workspaceRoot: store.workspaceRoot || undefined,
-        workspaceId: store.activeWorkspaceId || undefined,
-        sessionId,
-      };
-      const response = await service.streamMessage(
+      await service.streamMessage(
         content,
-        streamCtx,
+        {
+          ideSnapshot,
+          workspaceRoot: store.workspaceRoot || undefined,
+          workspaceId: store.activeWorkspaceId || undefined,
+          sessionId,
+        },
         buildRequestConfig(provider),
         (type: 'thinking' | 'content', text: string) => {
-          const msg = messages.value.find(m => m.id === assistantMsgId);
-          if (!msg) return;
+          if (!liveMessage.value) return;
           if (type === 'thinking') {
-            thinkingActive.value = true;
-            ensureBlock('thinking');
-            currentBlock!.content += text;
-            msg.thinking = (msg.thinking || '') + text;
+            ensureThinkingBlock();
+            if (activeBlock && activeBlock.type === 'thinking') {
+              activeBlock.content += text;
+            }
+            liveMessage.value.thinking = (liveMessage.value.thinking || '') + text;
           } else {
-            if (thinkingActive.value) {
-              thinkingActive.value = false;
-            }
-            // Ensure we have a response block before buffering
-            if (!currentBlock || currentBlock.type !== 'response') {
-              ensureBlock('response');
-            }
-            // Buffer content and flush at controlled intervals
+            ensureResponseBlock();
             contentBuffer.push(text);
             scheduleFlush();
-            msg.content += text;
           }
-          if (onChunk) onChunk();
+          callbacks.onChunk?.();
         },
         (event: StreamEvent) => {
+          if (!liveMessage.value) return;
           if (event.type === 'tool_start') {
-            toolStatus.value = event.message || '';
             const match = (event.message || '').match(/^🔍\s*(\S+):?\s*(.*)/);
             const toolType = match ? match[1] : (event.message || 'tool');
             const toolLabel = match ? match[2] : '';
-            finishBlock();
-            currentBlock = {
-              id: nextBlockId(),
-              type: 'tool_call',
-              content: '',
-              toolType,
-              toolLabel,
-              completed: false,
-            };
-            const msg = messages.value.find(m => m.id === assistantMsgId);
-            if (msg) {
-              if (!msg.blocks) msg.blocks = [];
-              msg.blocks.push(currentBlock);
-            }
+            startToolCallBlock(toolType, toolLabel);
           } else if (event.type === 'tool_end') {
-            toolStatus.value = '';
             finishBlock();
           } else if (event.type === 'tool_result') {
-            // Append tool result content to the active tool_call block
-            const resultText = event.content || event.message || '';
-            if (currentBlock && currentBlock.type === 'tool_call') {
-              currentBlock.content += resultText;
-            } else {
-              ensureBlock('tool_call', event.message || 'tool', '');
-              currentBlock!.content = resultText;
+            const resultText = event.content || '';
+            // 若当前块不是 tool_call,强制开一个
+            if (!activeBlock || activeBlock.type !== 'tool_call') {
+              startToolCallBlock('tool', '');
+            }
+            // 此时 activeBlock 必为 tool_call —— 用类型断言以避开 TS control-flow 残留窄化
+            const tc = activeBlock as Extract<LiveBlock, { type: 'tool_call' }> | null;
+            if (tc) {
+              tc.result = tc.result ? tc.result + resultText : resultText;
             }
           } else if (event.type === 'thinking_start') {
-            thinkingActive.value = true;
+            ensureThinkingBlock();
           } else if (event.type === 'thinking_end') {
-            thinkingActive.value = false;
+            finishBlock();
           }
         },
         { signal }
       );
-      // 编辑已下沉为 agent 内建工具(FileWriteTool/FileEditTool),在循环内直接落盘。
-      // response 仅含 content + timestamp,而 content 已通过 onChunk 流式写入 assistantMsg,
-      // 故此处无需再处理 response。
+
+      // 流正常结束:让 UI 知道 live 消息即将被后端权威数据替代
+      flushContent();
+      finishBlock();
     } catch (e: any) {
       webAgentLog.error(`streamMessage error: ${e.name} ${e.message}`, { name: e.name, message: e.message });
       if (e.name === 'AbortError') {
-        const msg = messages.value.find(m => m.id === assistantMsgId);
-        if (msg) {
-          msg.content += '\n\n*[已取消]*';
-        }
+        if (liveMessage.value) liveMessage.value.content += '\n\n*[已取消]*';
       } else {
-        const msg = messages.value.find(m => m.id === assistantMsgId);
-        if (msg) {
-          msg.role = 'system';
-          msg.content = `Error: ${e.message}`;
+        if (liveMessage.value) {
+          liveMessage.value.error = true;
+          liveMessage.value.content = `Error: ${e.message}`;
         }
+        callbacks.onError?.(e);
       }
     } finally {
       if (flushTimer) clearTimeout(flushTimer);
       flushContent();
       activeAbortController = null;
       finishBlock();
-      const msg = messages.value.find(m => m.id === assistantMsgId);
-      if (msg) msg.timestamp = Date.now();
-      thinkingActive.value = false;
       isProcessing.value = false;
+      // onDone 触发上层 refresh(从后端拉权威数据覆盖 live)
+      callbacks.onDone?.();
+      // 短暂保留 live 消息,等 refresh 完成后由上层清空
+      // (上层在 onDone 里调 sessionMessages.refresh(),刷新后 live 置 null)
     }
   }
 
@@ -342,19 +300,21 @@ export function useAgent(sessionId?: string) {
     isProcessing.value = false;
   }
 
-  function clearMessages() {
-    messages.value = [];
-    toolStatus.value = '';
-    thinkingActive.value = false;
-  }
-
-  function restoreMessages(msgs: ChatMessage[]) {
-    messages.value = msgs;
+  function clearLive() {
+    liveMessage.value = null;
   }
 
   function setMode(mode: AgentConfig['mode']) {
     config.value.mode = mode;
   }
 
-  return { messages, isProcessing, config, toolStatus, thinkingActive, sendMessage, streamMessage, cancelStream, clearMessages, restoreMessages, setMode };
+  return {
+    isProcessing,
+    config,
+    liveMessage,
+    streamMessage,
+    cancelStream,
+    clearLive,
+    setMode,
+  };
 }
