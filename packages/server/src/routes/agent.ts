@@ -53,16 +53,36 @@ interface StreamRequestBody {
 export function createAgentRouter(configDir: string, workspaceManager: WorkspaceManager, llmGateway: LLMGateway) {
   const router = Router();
 
-  function getRuntime(reqBody: Record<string, unknown>, workspaceRootOverride?: string): AgentRuntime {
+  async function getRuntime(reqBody: Record<string, unknown>, workspaceRootOverride?: string): Promise<AgentRuntime> {
     const body = reqBody as unknown as StreamRequestBody;
     // Reuse workspace-cached runtime when workspaceId is provided
     if (body.workspaceId) {
       const existing = workspaceManager.getRuntime(body.workspaceId);
       if (existing) return existing; // REUSE — MCP already connected
-      // Create new and cache it for future requests
-      const ws = workspaceManager.getWorkspaceData(body.workspaceId);
-      const wsRoot = ws?.rootPath ?? workspaceRootOverride ?? body.workspaceRoot;
-      const runtime = new AgentRuntime(buildRuntimeConfig(reqBody, configDir, llmGateway, wsRoot));
+
+      // Workspace not in memory (server restart / hot reload).
+      // Re-open from disk to restore sessions + workspace data.
+      const wsRoot = workspaceRootOverride ?? body.workspaceRoot;
+      if (wsRoot) {
+        try {
+          log.info(`Workspace ${body.workspaceId} not in memory, re-opening from ${wsRoot}`);
+          const data = await workspaceManager.openWorkspace(wsRoot, llmGateway);
+          // openWorkspace generates a new workspaceId if the old workspace.json
+          // doesn't have one. Use the returned workspaceId going forward.
+          // But the frontend still sends the old workspaceId — so we need to
+          // also make the old workspaceId work. The simplest way: if the
+          // re-opened workspace has a different ID, just use its runtime
+          // directly (the old ID is now stale but the runtime is fresh).
+          const runtime = workspaceManager.getRuntime(data.workspaceId);
+          if (runtime) return runtime;
+        } catch (e: any) {
+          log.warn(`Re-open workspace failed: ${e.message}`);
+        }
+      }
+
+      // Last resort: create a bare runtime (no restored sessions, no persistence)
+      const fallbackRoot = wsRoot || process.cwd();
+      const runtime = new AgentRuntime(buildRuntimeConfig(reqBody, configDir, llmGateway, fallbackRoot));
       workspaceManager.cacheRuntime(body.workspaceId, runtime);
       return runtime;
     }
@@ -79,9 +99,7 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
         return;
       }
 
-      const runtime = getRuntime(req.body);
-
-      // Refresh MCP config for cached workspace runtimes
+      const runtime = await getRuntime(req.body);
       if (req.body.workspaceId) {
         const latestMcpServers = loadEnabledMcpServers(configDir);
         await runtime.reinitialize(latestMcpServers.length > 0 ? latestMcpServers : undefined);
@@ -131,7 +149,7 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
       res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
-    const runtime = getRuntime(req.body, workspaceRoot);
+    const runtime = await getRuntime(req.body, workspaceRoot);
     const startMs = Date.now();
 
     if (body.workspaceId) {
