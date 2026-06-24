@@ -3,7 +3,6 @@
     <!-- 会话标签栏：仅在有工作区或有提供商时显示 -->
     <div v-if="editorStore.activeWorkspaceId || providerSettings.providers.value.length > 0">
       <n-tabs
-        v-if="useNewSessionTabs"
         v-model:value="activeSessionValue"
         type="card"
         closable
@@ -24,33 +23,6 @@
           </template>
         </n-tab-pane>
       </n-tabs>
-      <div v-else class="session-tabs-bar">
-        <button class="session-new-btn" @click="createNewSession" :title="$t('agent.newSession')">+</button>
-        <div class="session-tabs-scroll" ref="tabsScrollRef" @wheel="onTabsWheel" @scroll="updateScrollState">
-          <div
-            v-for="s in sessionStore.sessions"
-            :key="s.id"
-            class="session-tab"
-            :class="{ active: s.id === sessionStore.activeSessionId }"
-            @click="sessionStore.setActiveSession(s.id)"
-          >
-            <span class="session-tab-name" :title="s.name">{{ s.name }}</span>
-            <span class="session-tab-close" @click.stop="handleCloseSession(s.id)">×</span>
-          </div>
-        </div>
-        <template v-if="hasOverflow">
-          <button
-            class="session-scroll-btn"
-            :class="{ disabled: !canScrollLeft }"
-            @click="scrollTabs(-1)"
-          >◀</button>
-          <button
-            class="session-scroll-btn"
-            :class="{ disabled: !canScrollRight }"
-            @click="scrollTabs(1)"
-          >▶</button>
-        </template>
-      </div>
     </div>
 
     <!-- 思考进度条 —— 处理时在面板最上方滚动 -->
@@ -101,7 +73,6 @@
 
           <!-- 助手消息：按 blocks 顺序渲染，在时间轴上 -->
           <div v-if="msg.role === 'assistant'" class="timeline">
-            <!-- 有 blocks 时使用 blocks 渲染 -->
             <template v-if="msg.blocks && msg.blocks.length > 0">
               <div
                 v-for="block in msg.blocks"
@@ -138,6 +109,7 @@
                       <span class="tl-tool-icon">{{ block.completed ? '✅' : '⏳' }}</span>
                       <span class="tl-tool-type">{{ block.toolType }}</span>
                       <span v-if="block.toolLabel" class="tl-tool-label">{{ block.toolLabel }}</span>
+                      <span v-if="block.durationMs" class="tl-tool-duration">{{ block.durationMs }}ms</span>
                       <span class="tl-tool-toggle">{{ expandedState[block.id] ? '▾' : '▸' }}</span>
                     </div>
                     <div v-if="block.result" class="tl-tool-result" :class="{ expanded: expandedState[block.id] }">
@@ -153,28 +125,6 @@
                     <div class="tl-content" v-html="renderMarkdown(block.content)"></div>
                   </div>
                 </template>
-              </div>
-            </template>
-
-            <!-- 无 blocks 时回退到旧版渲染 -->
-            <template v-else>
-              <div v-if="msg.thinking" class="tl-node tl-thinking">
-                <div class="tl-dot tl-dot-thinking"></div>
-                <div class="tl-body">
-                  <div class="tl-thinking-header" @click="toggleBlock(msg.id)">
-                    <span class="tl-thinking-label">💭 {{ $t('agent.reasoning') }}</span>
-                    <span class="tl-thinking-toggle">{{ expandedState[msg.id] ? '▾' : '▸' }}</span>
-                  </div>
-                  <div class="tl-thinking-body" :class="{ expanded: expandedState[msg.id] }">
-                    <div class="tl-thinking-content" v-html="renderMarkdown(msg.thinking)"></div>
-                  </div>
-                </div>
-              </div>
-              <div v-if="msg.content" class="tl-node tl-response">
-                <div class="tl-dot tl-dot-response"></div>
-                <div class="tl-body">
-                  <div class="tl-content" v-html="renderMarkdown(msg.content)"></div>
-                </div>
               </div>
             </template>
           </div>
@@ -244,7 +194,7 @@ import { NTabs, NTabPane, NIcon } from 'naive-ui';
 import { useSessionStore } from '../../stores/sessions';
 import { useLLMSettings } from '../../composables/useLLMSettings';
 import { useEditorStore } from '../../stores/editor';
-import { useAgent, buildAgentSnapshot } from '../../composables/useAgent';
+import { useAgent } from '../../composables/useAgent';
 import { useSessionMessages } from '../../composables/useSessionMessages';
 import { renderMarkdown } from '../../services/markdown';
 import type { DisplayMessage } from '@vibeeditor/agent';
@@ -276,31 +226,22 @@ const { messages: persistedMessages, refresh: refreshMessages } = useSessionMess
   () => sessionStore.activeSessionId,
 );
 
-// 最终展示列表:已落盘消息 + 当前 live 消息(流式期间)
-const displayMessages = computed<DisplayMessage[]>(() => {
-  const list = [...persistedMessages.value];
-  if (agentCtrl.liveMessage.value) {
-    list.push(agentCtrl.liveMessage.value);
-  }
-  return list;
-});
-
-// 用户消息:发送时即时插入(提升响应感,无需等 refresh)
-const pendingUserMessages = ref<DisplayMessage[]>([]);
+// 最终展示列表:已落盘消息 + 当前 pending + live 消息(流式期间)
+// pending 与 live 绑定生命周期:一问一答紧邻,pending 在 live 之前
+// (send 期间不能发新消息,所以 pending 只会是 0 或 1 个)
+const pendingUserMessage = ref<DisplayMessage | null>(null);
 const visibleMessages = computed<DisplayMessage[]>(() => {
-  // pending 用户消息挂在已落盘列表前面(已落盘列表已包含历史)
-  // 但 pending 与已落盘可能重复:用 timestamp 去重
-  if (pendingUserMessages.value.length === 0) return displayMessages.value;
-  const persistedIds = new Set(persistedMessages.value.map(m => m.id));
-  const liveId = agentCtrl.liveMessage.value?.id;
-  // pending 应该在 refresh 后被替代;若已出现在 persisted 里就不重复
-  const filtered = pendingUserMessages.value.filter(m => !persistedIds.has(m.id) && m.id !== liveId);
-  return [...displayMessages.value, ...filtered];
+  const result = [...persistedMessages.value];
+  if (agentCtrl.liveMessage.value) {
+    if (pendingUserMessage.value) result.push(pendingUserMessage.value);
+    result.push(agentCtrl.liveMessage.value);
+  }
+  return result;
 });
 
-// 切换 session 时清空 pending
+// 切换 session 时清空 pending 和 live
 watch(() => sessionStore.activeSessionId, () => {
-  pendingUserMessages.value = [];
+  pendingUserMessage.value = null;
   agentCtrl.clearLive();
 });
 
@@ -311,7 +252,6 @@ const currentMode = computed({
 });
 
 // ===== 会话标签栏切换 =====
-const useNewSessionTabs = ref(true);
 const activeSessionValue = computed<string | undefined>({
   get: () => sessionStore.activeSessionId ?? undefined,
   set: (val) => { if (val) sessionStore.setActiveSession(val); },
@@ -320,41 +260,8 @@ function handleSessionTabClose(name: string) {
   sessionStore.closeSession(name);
 }
 
-// --- 会话标签栏滚动控制 ---
-const tabsScrollRef = ref<HTMLElement>();
-const hasOverflow = ref(false);
-const canScrollLeft = ref(false);
-const canScrollRight = ref(false);
-
-function updateScrollState() {
-  const el = tabsScrollRef.value;
-  if (!el) return;
-  hasOverflow.value = el.scrollWidth > el.clientWidth;
-  canScrollLeft.value = el.scrollLeft > 0;
-  canScrollRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
-}
-
-function scrollTabs(direction: 1 | -1) {
-  const el = tabsScrollRef.value;
-  if (!el) return;
-  el.scrollBy({ left: direction * 200, behavior: 'smooth' });
-}
-
-function onTabsWheel(e: WheelEvent) {
-  const el = tabsScrollRef.value;
-  if (!el) return;
-  e.preventDefault();
-  el.scrollBy({ left: e.deltaY, behavior: 'auto' });
-}
-
 async function createNewSession() {
   await sessionStore.createSession();
-  nextTick(() => updateScrollState());
-}
-
-async function handleCloseSession(id: string) {
-  await sessionStore.closeSession(id);
-  nextTick(() => updateScrollState());
 }
 
 // --- 块展开/折叠状态 ---
@@ -403,8 +310,6 @@ function onMessagesScroll() {
   userScrolledUp.value = !isNearBottom();
 }
 
-let ro: ResizeObserver | null = null;
-
 function setupObserver() {
   const el = messagesContainer.value;
   if (!el) return;
@@ -440,7 +345,7 @@ async function send() {
     timestamp: Date.now(),
     blocks: [{ id: `pending_user_${Date.now()}_r`, type: 'response', content: text }],
   };
-  pendingUserMessages.value.push(tempUserMsg);
+  pendingUserMessage.value = tempUserMsg;
 
   // 自动从首条消息命名会话
   if (sessionStore.activeSession && !sessionStore.activeSession.nameAutoGenerated) {
@@ -450,24 +355,6 @@ async function send() {
   const activeFilePath = editorStore.activeTab?.path;
   webAgentLog.info('send: starting streamMessage');
 
-  // 触发流式 — useAgent 内部把 sessionId 通过 service 传到后端
-  // 由于 useAgent 是用 '__panel__' 创建的,这里临时改写 sessionId:
-  // 为简化,我们直接注入 sessionId 到 streamMessage 的请求里
-  // (useAgent.streamMessage 已通过参数 sessionId 在 service 调用时传入)
-  // 为此 useAgent 需要接受 sessionId 参数,或者我们改用闭包绑定
-  // —— 当前实现:useAgent(sessionId) 在创建时绑定,我们改一种方式,直接在这里组装请求
-
-  // 简化:每次 send 时构造一次 ideSnapshot,触发 agentCtrl.streamMessage,
-  // 内部走 service.streamMessage 时透传 sessionId 字段;
-  // 由于 agentCtrl 是 '__panel__' 创建的,我们需要把真实 sessionId 传进去。
-  // 修复:在 useAgent.streamMessage 内部,sessionId 由参数传入。
-  // 但当前签名只接 (content, provider, activeFilePath, callbacks),sessionId 来自闭包。
-  // 临时方案:在 send 里直接写一个 inline 调用,绕过 agentCtrl ——
-  // 但这又破坏了 useAgent 的封装。
-  //
-  // 最干净的做法:让 useAgent 不在构造期绑定 sessionId,而由 streamMessage 接收 sessionId 参数。
-  // 这里改用这种:
-
   const streamPromise = agentCtrl.streamMessage(
     sessionId,
     text,
@@ -475,11 +362,10 @@ async function send() {
     activeFilePath,
     {
       onChunk: () => scheduleScroll(false),
-      onLiveUpdate: () => scheduleScroll(false),
       onDone: async () => {
         webAgentLog.info('send: streamMessage completed, refreshing from backend');
         await refreshMessages();
-        pendingUserMessages.value = [];
+        pendingUserMessage.value = null;
         agentCtrl.clearLive();
         scheduleScroll(true);
       },
@@ -535,24 +421,13 @@ onMounted(() => {
   providerSettings.reload();
   messagesContainer.value?.addEventListener('scroll', onMessagesScroll);
   setupObserver();
-
-  const scrollEl = tabsScrollRef.value;
-  if (scrollEl) {
-    ro = new ResizeObserver(() => updateScrollState());
-    ro.observe(scrollEl);
-    updateScrollState();
-  }
 });
 
 onUnmounted(() => {
   cancelAnimationFrame(scrollRafId);
   observer?.disconnect();
-  ro?.disconnect();
   messagesContainer.value?.removeEventListener('scroll', onMessagesScroll);
 });
-
-// 引用一下 buildAgentSnapshot,避免未使用 import 警告(虽然 useAgent 内部也用了)
-void buildAgentSnapshot;
 </script>
 
 <style scoped>
@@ -596,105 +471,6 @@ void buildAgentSnapshot;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-}
-.session-tabs-bar {
-  display: flex;
-  align-items: center;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
-  height: 32px;
-}
-
-.session-new-btn {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 16px;
-  width: 28px;
-  height: 100%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-right: 1px solid var(--border-color);
-}
-.session-new-btn:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-
-.session-tabs-scroll {
-  display: flex;
-  overflow-x: auto;
-  flex: 1;
-  min-width: 0;
-}
-.session-tabs-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.session-tab {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-right: 1px solid var(--border-color);
-  white-space: nowrap;
-  user-select: none;
-  max-width: 150px;
-}
-.session-tab.active {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-}
-.session-tab:hover {
-  background: var(--bg-hover);
-}
-
-.session-tab-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-
-.session-tab-close {
-  font-size: 12px;
-  opacity: 0.6;
-  flex-shrink: 0;
-}
-.session-tab-close:hover {
-  opacity: 1;
-  color: #f44747;
-}
-
-.session-scroll-btn {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  border-left: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  font-size: 10px;
-  width: 22px;
-  height: 100%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.session-scroll-btn:hover:not(.disabled) {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-.session-scroll-btn.disabled {
-  opacity: 0.3;
-  cursor: default;
 }
 
 /* ===== 思考进度条 ===== */
@@ -787,12 +563,6 @@ void buildAgentSnapshot;
 .tl-dot-response {
   background: #a0a0a0;
   box-shadow: 0 0 0 2px rgba(160, 160, 160, 0.3);
-}
-
-/* 编辑 — 亮绿色 */
-.tl-dot-edit {
-  background: #6a9955;
-  box-shadow: 0 0 0 2px rgba(106, 153, 85, 0.3);
 }
 
 /* 系统 — 红色 */
@@ -975,8 +745,15 @@ void buildAgentSnapshot;
   white-space: nowrap;
 }
 
-.tl-tool-toggle {
+.tl-tool-duration {
+  color: var(--text-secondary);
+  font-size: 10px;
+  opacity: 0.7;
+  font-family: 'Consolas', 'Courier New', monospace;
   margin-left: auto;
+}
+
+.tl-tool-toggle {
   font-size: 10px;
   opacity: 0.7;
 }
@@ -1008,40 +785,6 @@ void buildAgentSnapshot;
   white-space: pre-wrap;
   word-break: break-word;
   font-family: 'Consolas', 'Courier New', monospace;
-}
-
-/* ===== 编辑摘要节点 ===== */
-.tl-edit-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-  padding: 6px 0;
-  font-size: 11px;
-  color: #6a9955;
-}
-
-.tl-edit-file {
-  background: rgba(106, 153, 85, 0.15);
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-family: 'Consolas', 'Courier New', monospace;
-  font-size: 10px;
-}
-
-.tl-undo-btn {
-  margin-left: auto;
-  background: rgba(255, 200, 50, 0.15);
-  border: 1px solid rgba(255, 200, 50, 0.3);
-  color: #d4a017;
-  padding: 2px 8px;
-  font-size: 10px;
-  cursor: pointer;
-  border-radius: 3px;
-  white-space: nowrap;
-}
-.tl-undo-btn:hover {
-  background: rgba(255, 200, 50, 0.25);
 }
 
 /* ===== Footer ===== */
