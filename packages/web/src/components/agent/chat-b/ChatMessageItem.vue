@@ -13,28 +13,33 @@
 
   <!-- 助手消息 -->
   <div v-else-if="message.role === 'assistant'" class="msg-assistant">
-    <n-collapse v-if="message.blocks && message.blocks.length > 0" :default-expanded-names="defaultExpanded">
-      <template v-for="block in message.blocks" :key="block.id">
+    <template v-if="message.blocks && message.blocks.length > 0">
+      <!-- 思考块: 可折叠组 -->
+      <n-collapse v-if="thinkingBlocks.length > 0">
         <ChatThinkingBlock
-          v-if="block.type === 'thinking'"
+          v-for="block in thinkingBlocks"
+          :key="block.id"
           :block="block"
         />
-        <ChatToolBlock
-          v-else-if="block.type === 'tool_call'"
-          :block="block"
-        />
-        <div v-else-if="block.type === 'response'" class="msg-response-wrapper">
-          <ChatResponseBlock :content="block.content" />
-        </div>
-      </template>
-    </n-collapse>
+      </n-collapse>
+      <!-- 工具调用: 单行简讯, 不折叠 -->
+      <ChatToolBlock
+        v-for="block in toolBlocks"
+        :key="block.id"
+        :block="block"
+      />
+      <!-- 回复块: 正文 -->
+      <div v-for="block in responseBlocks" :key="block.id" class="msg-response-wrapper">
+        <ChatResponseBlock :content="block.content" />
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
 import { NCollapse, NAlert } from 'naive-ui';
-import type { DisplayMessage } from '@vibeeditor/agent';
+import type { DisplayMessage, DisplayBlock } from '@vibeeditor/agent';
 import ChatThinkingBlock from './ChatThinkingBlock.vue';
 import ChatToolBlock from './ChatToolBlock.vue';
 import ChatResponseBlock from './ChatResponseBlock.vue';
@@ -43,13 +48,15 @@ const props = defineProps<{
   message: DisplayMessage;
 }>();
 
-// 只默认展开 response 块,thinking/tool 默认折叠
-const defaultExpanded = computed(() => {
-  if (!props.message.blocks) return [];
-  return props.message.blocks
-    .filter(b => b.type === 'response')
-    .map(b => b.id);
-});
+const thinkingBlocks = computed(() =>
+  (props.message.blocks || []).filter(b => b.type === 'thinking') as (DisplayBlock & { type: 'thinking' })[]
+);
+const toolBlocks = computed(() =>
+  (props.message.blocks || []).filter(b => b.type === 'tool_call') as (DisplayBlock & { type: 'tool_call' })[]
+);
+const responseBlocks = computed(() =>
+  (props.message.blocks || []).filter(b => b.type === 'response') as (DisplayBlock & { type: 'response' })[]
+);
 </script>
 
 <style scoped>
