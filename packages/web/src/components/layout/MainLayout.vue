@@ -300,7 +300,7 @@ import PptxViewer from '../editor/PptxViewer.vue';
 import PdfViewer from '../editor/PdfViewer.vue';
 import HtmlViewer from '../editor/HtmlViewer.vue';
 import MarkdownViewer from '../editor/MarkdownViewer.vue';
-import AgentPanel from '../agent/AgentPanel.vue';
+import { AgentPanel } from '../agent';
 import McpSettingsPanel from '../mcp/McpSettingsPanel.vue';
 import RightToolbar from './RightToolbar.vue';
 import type { RightToolbarItem } from './RightToolbar.vue';
