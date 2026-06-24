@@ -173,7 +173,20 @@
       </div>
       <div v-if="activeRightPanel" class="right-resize-handle" @mousedown="startRightPanelResize"></div>
       <div v-if="activeRightPanel" class="right-sidebar" :style="{ width: rightPanelWidth + 'px' }">
-        <AgentPanel v-if="activeRightPanel === 'agent'" @open-settings="handleOpenSettings('ai')" />
+        <template v-if="activeRightPanel === 'agent'">
+          <div class="agent-ui-toggle">
+            <n-button
+              size="tiny"
+              text
+              :type="useChatBUI ? 'primary' : 'default'"
+              @click="toggleChatUI"
+            >
+              {{ useChatBUI ? 'B' : 'A' }}
+            </n-button>
+          </div>
+          <AgentPanel v-if="!useChatBUI" @open-settings="handleOpenSettings('ai')" />
+          <AgentChatB v-else @open-settings="handleOpenSettings('ai')" />
+        </template>
         <McpSettingsPanel v-else-if="activeRightPanel === 'mcp'" />
       </div>
       <RightToolbar
@@ -301,6 +314,7 @@ import PdfViewer from '../editor/PdfViewer.vue';
 import HtmlViewer from '../editor/HtmlViewer.vue';
 import MarkdownViewer from '../editor/MarkdownViewer.vue';
 import { AgentPanel } from '../agent';
+import AgentChatB from '../agent/AgentChatB.vue';
 import McpSettingsPanel from '../mcp/McpSettingsPanel.vue';
 import RightToolbar from './RightToolbar.vue';
 import type { RightToolbarItem } from './RightToolbar.vue';
@@ -338,6 +352,13 @@ const { renamingPath, creatingInDir, creatingNodeKey, handleContextMenu, handleC
 
 // ===== 文件树切换 =====
 const useNewFileTree = ref(true);
+
+// Agent UI v2 开关 (B 组件);持久化到 localStorage
+const useChatBUI = ref(localStorage.getItem('vibe-chat-ui-v2') === 'true');
+const toggleChatUI = () => {
+  useChatBUI.value = !useChatBUI.value;
+  localStorage.setItem('vibe-chat-ui-v2', String(useChatBUI.value));
+};
 
 const activeTabValue = computed<string | undefined>({
   get: () => store.activeTabId ?? undefined,
@@ -1317,6 +1338,13 @@ function startRightPanelResize(e: MouseEvent) {
 .right-sidebar {
   flex-shrink: 0;
   border-left: 1px solid var(--border-color);
+  position: relative;
+}
+.agent-ui-toggle {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  z-index: 10;
 }
 .undo-notification {
   position: fixed;
