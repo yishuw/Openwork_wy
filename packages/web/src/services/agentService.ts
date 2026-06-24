@@ -33,8 +33,16 @@ export interface AgentMessage {
 /** SSE 流式事件类型 */
 export interface StreamEvent {
   type: 'tool_start' | 'tool_end' | 'tool_result' | 'thinking_start' | 'thinking_end';
-  message?: string;
+  /** tool_result 的内容文本 */
   content?: string;
+  /** 工具类型(tool_start/tool_end) */
+  toolType?: string;
+  /** 工具标签(tool_start) */
+  toolLabel?: string;
+  /** 工具参数(tool_start) */
+  toolParams?: Record<string, string>;
+  /** 工具执行耗时毫秒(tool_end) */
+  durationMs?: number;
 }
 
 /** 流式请求 body —— 与 server 端 StreamRequestBody 对齐 */
@@ -130,11 +138,30 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
             }
 
             if (data.tool_start && onEvent) {
-              onEvent({ type: 'tool_start', message: data.tool_start });
+              const ts = typeof data.tool_start === 'string'
+                ? { toolType: 'tool', toolLabel: data.tool_start, toolParams: {} }
+                : data.tool_start;
+              onEvent({
+                type: 'tool_start',
+                toolType: ts.toolType || 'tool',
+                toolLabel: ts.toolLabel || '',
+                toolParams: ts.toolParams || {},
+              });
             } else if (data.tool_end && onEvent) {
-              onEvent({ type: 'tool_end', message: data.tool_end });
+              const te = typeof data.tool_end === 'string'
+                ? { toolType: data.tool_end, durationMs: 0 }
+                : data.tool_end;
+              onEvent({
+                type: 'tool_end',
+                toolType: te.toolType,
+                durationMs: te.durationMs || 0,
+              });
             } else if (data.tool_result && onEvent) {
-              onEvent({ type: 'tool_result', content: typeof data.tool_result === 'string' ? data.tool_result : (data.tool_result?.content || '') });
+              const tr = data.tool_result;
+              onEvent({
+                type: 'tool_result',
+                content: typeof tr === 'string' ? tr : (tr?.content || ''),
+              });
             }
 
             if (data.thinking) {

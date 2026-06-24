@@ -117,7 +117,6 @@ export function useAgent() {
     activeFilePath: string | undefined,
     callbacks: {
       onChunk?: () => void;
-      onLiveUpdate?: (msg: DisplayMessage | null) => void;
       onDone?: () => void;
       onError?: (err: Error) => void;
     },
@@ -134,7 +133,6 @@ export function useAgent() {
       blocks: [],
       live: true,
     };
-    callbacks.onLiveUpdate?.(liveMessage.value);
 
     // 取消上一个在途请求
     if (activeAbortController) {
@@ -175,14 +173,14 @@ export function useAgent() {
       pushBlock({ id: nextBlockId(), type: 'thinking', content: '', completed: false });
     }
 
-    function startToolCallBlock(toolType: string, toolLabel: string) {
+    function startToolCallBlock(toolType: string, toolLabel: string, params: Record<string, string>) {
       finishBlock();
       pushBlock({
         id: nextBlockId(),
         type: 'tool_call',
         toolType,
         toolLabel,
-        params: {},
+        params,
         result: '',
         durationMs: 0,
         completed: false,
@@ -239,17 +237,18 @@ export function useAgent() {
         (event: StreamEvent) => {
           if (!liveMessage.value) return;
           if (event.type === 'tool_start') {
-            const match = (event.message || '').match(/^🔍\s*(\S+):?\s*(.*)/);
-            const toolType = match ? match[1] : (event.message || 'tool');
-            const toolLabel = match ? match[2] : '';
-            startToolCallBlock(toolType, toolLabel);
+            startToolCallBlock(event.toolType || 'tool', event.toolLabel || '', event.toolParams || {});
           } else if (event.type === 'tool_end') {
+            // 填入耗时再 finish
+            if (activeBlock && activeBlock.type === 'tool_call') {
+              activeBlock.durationMs = event.durationMs || 0;
+            }
             finishBlock();
           } else if (event.type === 'tool_result') {
             const resultText = event.content || '';
             // 若当前块不是 tool_call,强制开一个
             if (!activeBlock || activeBlock.type !== 'tool_call') {
-              startToolCallBlock('tool', '');
+              startToolCallBlock('tool', '', {});
             }
             // 此时 activeBlock 必为 tool_call —— 用类型断言以避开 TS control-flow 残留窄化
             const tc = activeBlock as Extract<LiveBlock, { type: 'tool_call' }> | null;

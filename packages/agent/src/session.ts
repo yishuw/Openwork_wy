@@ -21,6 +21,10 @@ export interface SessionEvent {
   data?: string;
   toolType?: string;
   toolLabel?: string;
+  /** 工具调用参数(tool_start 时携带) */
+  toolParams?: Record<string, string>;
+  /** 工具执行耗时(tool_end 时携带) */
+  durationMs?: number;
 }
 
 export type SessionEventCallback = (event: SessionEvent) => void;
@@ -182,10 +186,10 @@ export class Session {
           emit({ type: 'thinking', agentId: agent.definition.id, data: e.text });
           break;
         case 'tool_start':
-          emit({ type: 'tool_start', agentId: agent.definition.id, toolType: e.toolType, toolLabel: e.toolLabel });
+          emit({ type: 'tool_start', agentId: agent.definition.id, toolType: e.toolType, toolLabel: e.toolLabel, toolParams: e.toolParams });
           break;
         case 'tool_end':
-          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType });
+          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType, durationMs: e.durationMs });
           break;
         case 'tool_result':
           emit({ type: 'tool_result', agentId: agent.definition.id, toolType: e.toolType, data: e.text });
@@ -222,10 +226,10 @@ export class Session {
           emit({ type: 'thinking', agentId: agent.definition.id, data: e.text });
           break;
         case 'tool_start':
-          emit({ type: 'tool_start', agentId: agent.definition.id, toolType: e.toolType, toolLabel: e.toolLabel });
+          emit({ type: 'tool_start', agentId: agent.definition.id, toolType: e.toolType, toolLabel: e.toolLabel, toolParams: e.toolParams });
           break;
         case 'tool_end':
-          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType });
+          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType, durationMs: e.durationMs });
           break;
         case 'tool_result':
           emit({ type: 'tool_result', agentId: agent.definition.id, toolType: e.toolType, data: e.text });

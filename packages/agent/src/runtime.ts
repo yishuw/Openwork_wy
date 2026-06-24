@@ -45,6 +45,10 @@ export interface AgentRuntimeEvent {
   text?: string;
   toolName?: string;
   toolLabel?: string;
+  /** 工具调用参数(tool_start 时携带) */
+  toolParams?: Record<string, string>;
+  /** 工具执行耗时(tool_end 时携带) */
+  durationMs?: number;
   error?: string;
 }
 
@@ -222,10 +226,10 @@ export class AgentRuntime {
           emit({ type: 'thinking', text: se.data });
           break;
         case 'tool_start':
-          emit({ type: 'tool_start', toolName: se.toolType, toolLabel: se.toolLabel });
+          emit({ type: 'tool_start', toolName: se.toolType, toolLabel: se.toolLabel, toolParams: se.toolParams });
           break;
         case 'tool_end':
-          emit({ type: 'tool_end', toolName: se.toolType });
+          emit({ type: 'tool_end', toolName: se.toolType, durationMs: se.durationMs });
           break;
         case 'tool_result':
           emit({ type: 'tool_result', toolName: se.toolType, text: se.data });

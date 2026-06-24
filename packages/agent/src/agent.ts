@@ -16,6 +16,10 @@ export interface AgentEvent {
   text?: string;
   toolType?: string;
   toolLabel?: string;
+  /** 工具调用参数(tool_start 时携带,供前端流式期间展示) */
+  toolParams?: Record<string, string>;
+  /** 工具执行耗时(tool_end 时携带,供前端展示) */
+  durationMs?: number;
 }
 
 export type AgentEventCallback = (event: AgentEvent) => void;
@@ -137,13 +141,13 @@ export class Agent {
 
         for (const tool of parsedTools) {
           toolCalls.push(tool);
-          emit({ type: 'tool_start', toolType: tool.type, toolLabel: tool.params.path || tool.params.pattern || '' });
+          emit({ type: 'tool_start', toolType: tool.type, toolLabel: tool.params.path || tool.params.pattern || '', toolParams: tool.params });
 
           const { result, durationMs } = await this.executeToolTimed(tool);
 
           emit({ type: 'tool_result', toolType: tool.type, text: result });
           fullContent += `\n**[Tool: ${tool.type}]**\n${result}\n`;
-          emit({ type: 'tool_end', toolType: tool.type });
+          emit({ type: 'tool_end', toolType: tool.type, durationMs });
 
           // 上报给 Session 写入 memory
           onToolCall?.({
@@ -251,13 +255,13 @@ export class Agent {
 
         for (const tool of parsedTools) {
           toolCalls.push(tool);
-          emit({ type: 'tool_start', toolType: tool.type, toolLabel: tool.params.path || tool.params.pattern || '' });
+          emit({ type: 'tool_start', toolType: tool.type, toolLabel: tool.params.path || tool.params.pattern || '', toolParams: tool.params });
 
           const { result, durationMs } = await this.executeToolTimed(tool);
 
           emit({ type: 'tool_result', toolType: tool.type, text: result });
           fullContent += `\n\n**[Tool: ${tool.type}]**\n${result}\n`;
-          emit({ type: 'tool_end', toolType: tool.type });
+          emit({ type: 'tool_end', toolType: tool.type, durationMs });
 
           onToolCall?.({
             type: tool.type,

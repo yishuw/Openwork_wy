@@ -146,7 +146,7 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
       if (mcpStatus.serverCount > 0) {
         await runtime.initialize();
         reqLog.info(`MCP initialized: ${mcpStatus.serverCount} server(s), ${mcpStatus.toolCount} tool(s)`);
-        writeSSE({ tool_start: `🔌 MCP: ${mcpStatus.serverCount} server(s), ${mcpStatus.toolCount} tool(s)` });
+        writeSSE({ tool_start: { toolType: 'mcp', toolLabel: `MCP: ${mcpStatus.serverCount} server(s), ${mcpStatus.toolCount} tool(s)`, toolParams: {} } });
       }
 
       reqLog.info('Stream started');
@@ -164,10 +164,10 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
               writeSSE({ thinking: e.text });
               break;
             case 'tool_start':
-              writeSSE({ tool_start: `🔍 ${e.toolName}: ${e.toolLabel || ''}` });
+              writeSSE({ tool_start: { toolType: e.toolName, toolLabel: e.toolLabel || '', toolParams: e.toolParams || {} } });
               break;
             case 'tool_end':
-              writeSSE({ tool_end: `${e.toolName} complete` });
+              writeSSE({ tool_end: { toolType: e.toolName, durationMs: e.durationMs || 0 } });
               break;
             case 'tool_result':
               writeSSE({ tool_result: { name: e.toolName, content: e.text } });
