@@ -221,8 +221,10 @@ let isResizingInput = false;
 const agentCtrl = useAgent();
 
 // 从后端拉取展示消息(监听 workspaceId / sessionId 变化自动 refresh)
+// 用 editorStore.activeWorkspaceId 而非 sessionStore.boundWorkspaceId,
+// 与 useAgent.streamMessage 的 workspaceId 保持一致
 const { messages: persistedMessages, refresh: refreshMessages } = useSessionMessages(
-  () => sessionStore.boundWorkspaceId,
+  () => editorStore.activeWorkspaceId,
   () => sessionStore.activeSessionId,
 );
 
@@ -365,8 +367,12 @@ async function send() {
       onDone: async () => {
         webAgentLog.info('send: streamMessage completed, refreshing from backend');
         await refreshMessages();
-        pendingUserMessage.value = null;
-        agentCtrl.clearLive();
+        // 只有当后端确实返回了数据才清空 live/pending,
+        // 否则保留 live 消息避免内容突然消失
+        if (persistedMessages.value.length > 0) {
+          pendingUserMessage.value = null;
+          agentCtrl.clearLive();
+        }
         scheduleScroll(true);
       },
       onError: (err) => {

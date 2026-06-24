@@ -285,9 +285,8 @@ export function useAgent() {
       finishBlock();
       isProcessing.value = false;
       // onDone 触发上层 refresh(从后端拉权威数据覆盖 live)
-      callbacks.onDone?.();
-      // 短暂保留 live 消息,等 refresh 完成后由上层清空
-      // (上层在 onDone 里调 sessionMessages.refresh(),刷新后 live 置 null)
+      // await 确保 refresh 完成后 streamMessage 才真正返回
+      await callbacks.onDone?.();
     }
   }
 

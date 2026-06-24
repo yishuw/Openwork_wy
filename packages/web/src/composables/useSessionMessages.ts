@@ -21,14 +21,14 @@ export function useSessionMessages(
 ) {
   const messages = ref<DisplayMessage[]>([]);
   const loading = ref(false);
-  let activeWorkspaceId: string | null = null;
-  let activeSessionId: string | null = null;
 
   async function refresh() {
     const wid = workspaceIdGetter();
     const sid = sessionIdGetter();
     if (!wid || !sid) {
-      messages.value = [];
+      // wid/sid 为 null 时不清空已有消息 —— 避免流结束后 refresh 因为
+      // workspaceId 暂时不可用而把内容全清掉。session 切换时的清空
+      // 由 watch 中的 refresh 调用自然处理(新 session 本来就没数据)。
       return;
     }
     loading.value = true;
@@ -43,17 +43,16 @@ export function useSessionMessages(
   }
 
   // 两个 getter 都用 watch 监听,任一变化触发 refresh
+  // session/workspace 切换时先清空再 refresh,避免新 session 显示旧数据
   watch(workspaceIdGetter, () => {
-    activeWorkspaceId = workspaceIdGetter() ?? null;
+    messages.value = [];
     refresh();
   }, { immediate: true });
 
   watch(sessionIdGetter, () => {
-    activeSessionId = sessionIdGetter() ?? null;
+    messages.value = [];
     refresh();
-  }, { immediate: true });
-
-  void activeWorkspaceId; void activeSessionId;
+  });
 
   return { messages, loading, refresh };
 }
