@@ -37,6 +37,7 @@ export const useSessionStore = defineStore('sessions', () => {
   const sessions = ref<WorkspaceAgentSession[]>([]);
   const activeSessionId = ref<string | null>(null);
   const boundWorkspaceId = ref<string | null>(null);
+  const boundWorkspaceRoot = ref<string | null>(null);
 
   // --- Computed ---
   const activeSession = computed<WorkspaceAgentSession | null>(
@@ -46,8 +47,9 @@ export const useSessionStore = defineStore('sessions', () => {
   // --- Methods ---
 
   /** 绑定到指定工作区:从后端拉取 session 列表 */
-  async function bindWorkspace(workspaceId: string | null, agentSessions?: WorkspaceAgentSession[]) {
+  async function bindWorkspace(workspaceId: string | null, agentSessions?: WorkspaceAgentSession[], workspaceRoot?: string) {
     boundWorkspaceId.value = workspaceId;
+    boundWorkspaceRoot.value = workspaceRoot ?? null;
 
     if (!workspaceId) {
       sessions.value = [];
@@ -83,7 +85,7 @@ export const useSessionStore = defineStore('sessions', () => {
     if (boundWorkspaceId.value) {
       try {
         const client = createFileServiceClient();
-        await client.saveWorkspaceSession(boundWorkspaceId.value, session);
+        await client.saveWorkspaceSession(boundWorkspaceId.value, session, boundWorkspaceRoot.value ?? undefined);
       } catch (e: any) {
         // 后端 save 失败不阻塞前端 UI;memory 在首条对话流 done 时会重新落盘
         console.warn(`createSession: backend save failed: ${e.message}`);
@@ -101,7 +103,7 @@ export const useSessionStore = defineStore('sessions', () => {
     if (boundWorkspaceId.value) {
       try {
         const client = createFileServiceClient();
-        await client.deleteWorkspaceSession(boundWorkspaceId.value, id);
+        await client.deleteWorkspaceSession(boundWorkspaceId.value, id, boundWorkspaceRoot.value ?? undefined);
       } catch (e: any) {
         console.warn(`closeSession: backend delete failed: ${e.message}`);
       }
@@ -133,7 +135,7 @@ export const useSessionStore = defineStore('sessions', () => {
     if (boundWorkspaceId.value) {
       try {
         const client = createFileServiceClient();
-        await client.saveWorkspaceSession(boundWorkspaceId.value, session);
+        await client.saveWorkspaceSession(boundWorkspaceId.value, session, boundWorkspaceRoot.value ?? undefined);
       } catch (e: any) {
         console.warn(`updateSessionName: backend save failed: ${e.message}`);
       }
@@ -151,7 +153,7 @@ export const useSessionStore = defineStore('sessions', () => {
     if (boundWorkspaceId.value) {
       try {
         const client = createFileServiceClient();
-        await client.saveWorkspaceSession(boundWorkspaceId.value, session);
+        await client.saveWorkspaceSession(boundWorkspaceId.value, session, boundWorkspaceRoot.value ?? undefined);
       } catch (e: any) {
         console.warn(`autoNameFromFirstMessage: backend save failed: ${e.message}`);
       }

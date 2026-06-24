@@ -57,7 +57,6 @@ function buildRuntimeConfig(provider: ProviderConfig, workDir: string, mcpServer
     provider,
     workspaceRoot: workDir,
     mcpServers,
-    maxTurns: 15,
   };
 }
 

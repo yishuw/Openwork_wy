@@ -226,6 +226,7 @@ const agentCtrl = useAgent();
 const { messages: persistedMessages, refresh: refreshMessages } = useSessionMessages(
   () => editorStore.activeWorkspaceId,
   () => sessionStore.activeSessionId,
+  () => editorStore.workspaceRoot,
 );
 
 // 最终展示列表:已落盘消息 + 当前 pending + live 消息(流式期间)
@@ -366,13 +367,15 @@ async function send() {
       onChunk: () => scheduleScroll(false),
       onDone: async () => {
         webAgentLog.info('send: streamMessage completed, refreshing from backend');
+        // 后端在发送 done SSE 事件之前已完成 persistSessionMemory,
+        // 所以 refresh 一定能拿到最新落盘数据。
+        // 如果 refresh 失败(网络等),useSessionMessages 内部已 catch 并保留旧数据,
+        // 此时清空 live 会让用户暂时看不到最新回复,但不会丢历史——下次切换 session
+        // 再切回时会重新拉取。相比保留 live 导致 streaming error 被掩盖,
+        // 清空 live 是更安全的默认行为。
         await refreshMessages();
-        // 只有当后端确实返回了数据才清空 live/pending,
-        // 否则保留 live 消息避免内容突然消失
-        if (persistedMessages.value.length > 0) {
-          pendingUserMessage.value = null;
-          agentCtrl.clearLive();
-        }
+        pendingUserMessage.value = null;
+        agentCtrl.clearLive();
         scheduleScroll(true);
       },
       onError: (err) => {

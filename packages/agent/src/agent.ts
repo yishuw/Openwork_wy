@@ -27,7 +27,7 @@ export type AgentEventCallback = (event: AgentEvent) => void;
 /** 工具调用回调 — Agent 每完成一次工具调用通过此回调上报给 Session 写入 memory */
 export type ToolCallReportCallback = (toolCall: ToolCallRecord) => void;
 
-const DEFAULT_MAX_TURNS = 15;
+const DEFAULT_MAX_TURNS = Infinity;
 
 export class Agent {
   readonly definition: AgentDefinition;

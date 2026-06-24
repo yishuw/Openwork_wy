@@ -201,7 +201,7 @@ export function useFileSystem() {
       store.workspaceRoots = [{ path: info.rootPath, name: info.rootName, mode, workspaceId: info.workspaceId }];
       store.activeWorkspaceId = info.workspaceId;
       const sessionStore = useSessionStore();
-      await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions);
+      await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions, info.rootPath);
     } catch {
       error.value = t('fs.singleFileWorkspaceFailed');
       return;
@@ -468,7 +468,7 @@ export function useFileSystem() {
         store.workspaceRoots = [{ path: info.rootPath, name: info.rootName, mode: 'local', workspaceId: info.workspaceId }];
         store.activeWorkspaceId = info.workspaceId;
         const sessionStore = useSessionStore();
-        await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions);
+        await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions, info.rootPath);
       } catch {
         error.value = t('fs.singleFileWorkspaceFailed');
         return;
@@ -501,7 +501,7 @@ export function useFileSystem() {
           store.workspaceRoots = [{ path: info.rootPath, name: info.rootName, mode: 'local', workspaceId: info.workspaceId }];
           store.activeWorkspaceId = info.workspaceId;
           const sessionStore = useSessionStore();
-          await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions);
+          await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions, info.rootPath);
         } catch {
           error.value = t('fs.singleFileWorkspaceFailed');
           return null;
@@ -566,7 +566,7 @@ export function useFileSystem() {
 
       // 绑定 Agent 会话到工作区
       const sessionStore = useSessionStore();
-      await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions);
+      await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions, info.rootPath);
 
       await loadDirectory('.');
 
@@ -634,7 +634,7 @@ export function useFileSystem() {
                   store.workspaceRoots = [{ path: info.rootPath, name: info.rootName, mode: 'local', workspaceId: info.workspaceId }];
                   store.activeWorkspaceId = info.workspaceId;
                   const sessionStore = useSessionStore();
-                  await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions);
+                  await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions, info.rootPath);
                 } catch {
                   error.value = t('fs.singleFileWorkspaceFailed');
                   return false;
@@ -670,8 +670,12 @@ export function useFileSystem() {
       await client.updateWorkspace(wsId, {
         openTabs: tabInfos,
         activeTabPath,
+        workspaceRoot: store.workspaceRoot,
       });
-    } catch { /* 静默失败 */ }
+    } catch (e: any) {
+      // 不要静默失败 —— server 重启等场景下持久化失败需要可追踪
+      console.warn(`persistWorkspaceState failed: ${e.message}`);
+    }
   }
 
   /**

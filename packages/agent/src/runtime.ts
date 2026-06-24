@@ -324,7 +324,7 @@ export class AgentRuntime {
         systemPrompt: this.agentConfig.systemPrompt || DEFAULT_SYSTEM_PROMPT,
         temperature: this.agentConfig.temperature,
         maxTokens: this.agentConfig.maxTokens,
-        maxTurns: this.config.maxTurns ?? (this.config.mode === 'build' ? 20 : 10),
+        maxTurns: this.config.maxTurns,
       },
       this.agentConfig,
       this.config.workspaceRoot,

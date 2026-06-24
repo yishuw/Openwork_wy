@@ -40,6 +40,37 @@ function toFileEntry(absPath: string, name: string, isDir: boolean, size?: numbe
 export function createWorkspaceRouter(manager: WorkspaceManager, llmGateway: LLMGateway) {
   const router = Router();
 
+  /**
+   * 确保 workspace 在内存中。若 server 重启导致 WorkspaceManager 丢失了该 workspace，
+   * 且调用方提供了 rootPath，则自动从磁盘重新打开（复用 agent 路由 getRuntime 的恢复模式）。
+   *
+   * @returns true 表示 workspace 可用（原本就在或已恢复）
+   */
+  async function ensureWorkspace(workspaceId: string, rootPath?: string): Promise<boolean> {
+    if (manager.getWorkspaceData(workspaceId)) return true;
+
+    // Workspace 不在内存 —— 尝试从磁盘恢复
+    if (rootPath) {
+      try {
+        log.info(`Workspace ${workspaceId} not in memory, re-opening from ${rootPath}`);
+        await manager.openWorkspace(rootPath, llmGateway);
+        // openWorkspace 可能生成新的 workspaceId,但原 workspaceId 对应的 runtime
+        // 也在 openWorkspace 内部被缓存。检查任意一个。
+        const data = manager.getWorkspaceData(workspaceId);
+        if (data) {
+          log.info(`Workspace ${workspaceId} re-opened successfully`);
+          return true;
+        }
+        // 如果旧 workspaceId 没命中,尝试获取 openWorkspace 返回的 data.workspaceId
+        // (不是必需的 —— openWorkspace 内部把 runtime 存在 workspaceId 下,
+        //  而 workspaceId 来自 existingData 或新生成的)
+      } catch (e: any) {
+        log.warn(`Failed to re-open workspace ${workspaceId}: ${e.message}`);
+      }
+    }
+    return false;
+  }
+
   router.get('/roots', async (_req: Request, res: Response) => {
     try {
       const roots = getSystemRoots();
@@ -132,12 +163,14 @@ export function createWorkspaceRouter(manager: WorkspaceManager, llmGateway: LLM
 
   router.post('/update', async (req: Request, res: Response) => {
     try {
-      const { workspaceId, openTabs, activeTabPath } = req.body;
+      const { workspaceId, openTabs, activeTabPath, workspaceRoot } = req.body;
       if (!workspaceId) {
         res.status(400).json({ error: 'workspaceId is required' });
         return;
       }
 
+      // 若 server 重启导致 workspace 不在内存,尝试从磁盘恢复
+      await ensureWorkspace(workspaceId, workspaceRoot);
       await manager.updateWorkspaceData(workspaceId, { openTabs, activeTabPath });
       res.json({ success: true });
     } catch (err) {
@@ -169,10 +202,12 @@ export function createWorkspaceRouter(manager: WorkspaceManager, llmGateway: LLM
   router.get('/sessions', async (req: Request, res: Response) => {
     try {
       const workspaceId = req.query.workspaceId as string;
+      const workspaceRoot = req.query.workspaceRoot as string | undefined;
       if (!workspaceId) {
         res.status(400).json({ error: 'workspaceId is required' });
         return;
       }
+      await ensureWorkspace(workspaceId, workspaceRoot);
       const sessions = manager.getAgentSessions(workspaceId);
       res.json({ sessions });
     } catch (err) {
@@ -182,11 +217,12 @@ export function createWorkspaceRouter(manager: WorkspaceManager, llmGateway: LLM
 
   router.post('/sessions', async (req: Request, res: Response) => {
     try {
-      const { workspaceId, session } = req.body;
+      const { workspaceId, session, workspaceRoot } = req.body;
       if (!workspaceId || !session) {
         res.status(400).json({ error: 'workspaceId and session are required' });
         return;
       }
+      await ensureWorkspace(workspaceId, workspaceRoot);
       await manager.saveAgentSession(workspaceId, session);
       res.json({ success: true });
     } catch (err) {
@@ -199,10 +235,12 @@ export function createWorkspaceRouter(manager: WorkspaceManager, llmGateway: LLM
     try {
       const { sessionId } = req.params;
       const workspaceId = req.query.workspaceId as string;
+      const workspaceRoot = req.query.workspaceRoot as string | undefined;
       if (!workspaceId || !sessionId) {
         res.status(400).json({ error: 'workspaceId and sessionId are required' });
         return;
       }
+      await ensureWorkspace(workspaceId, workspaceRoot);
       await manager.deleteAgentSession(workspaceId, sessionId);
       res.json({ success: true });
     } catch (err) {
@@ -215,10 +253,15 @@ export function createWorkspaceRouter(manager: WorkspaceManager, llmGateway: LLM
     try {
       const { sessionId } = req.params;
       const workspaceId = req.query.workspaceId as string;
+      const workspaceRoot = req.query.workspaceRoot as string | undefined;
       if (!workspaceId || !sessionId) {
         res.status(400).json({ error: 'workspaceId and sessionId are required' });
         return;
       }
+
+      // 若 server 重启导致 workspace 不在内存,尝试从磁盘恢复
+      await ensureWorkspace(workspaceId, workspaceRoot);
+
       const messages = manager.getSessionDisplayMessages(workspaceId, sessionId);
       res.json({ messages });
     } catch (err) {

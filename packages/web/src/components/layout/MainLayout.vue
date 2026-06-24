@@ -824,6 +824,15 @@ watch(
   { deep: true }
 );
 
+// 组件卸载时清理持久化定时器,并立即 flush 当前 tab 状态
+onUnmounted(() => {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+    fs.persistWorkspaceState();
+  }
+});
+
 // 工作区根变化时更新跨标签页去重状态
 watch(() => store.workspaceRoots, () => {
   updateWorkspacePaths();

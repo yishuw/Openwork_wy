@@ -10,17 +10,21 @@ import { webAgentLog } from '../services/logger';
  *   const { messages, refresh, loading } = useSessionMessages(
  *     () => store.activeWorkspaceId,
  *     () => sessionStore.activeSessionId,
+ *     () => store.workspaceRoot,
  *   );
  *
  * - workspaceId 或 sessionId 变化时自动 refresh
  * - 流式结束后调用方应主动调用 refresh() 以拉取最新落盘数据
+ * - 内建 generation counter,防止快速切换时旧响应覆盖新数据
  */
 export function useSessionMessages(
   workspaceIdGetter: () => string | null | undefined,
   sessionIdGetter: () => string | null | undefined,
+  workspaceRootGetter: () => string | null | undefined,
 ) {
   const messages = ref<DisplayMessage[]>([]);
   const loading = ref(false);
+  let refreshGen = 0;
 
   async function refresh() {
     const wid = workspaceIdGetter();
@@ -31,28 +35,38 @@ export function useSessionMessages(
       // 由 watch 中的 refresh 调用自然处理(新 session 本来就没数据)。
       return;
     }
+
+    const gen = ++refreshGen;
     loading.value = true;
     try {
       const client = createFileServiceClient();
-      messages.value = await client.getSessionMessages(wid, sid);
+      const root = workspaceRootGetter();
+      const result = await client.getSessionMessages(wid, sid, root ?? undefined);
+      // 仅当没有更新的 refresh 请求时才应用结果
+      if (gen === refreshGen) {
+        messages.value = result;
+      }
     } catch (e: any) {
-      webAgentLog.error(`useSessionMessages.refresh failed: ${e.message}`, { workspaceId: wid, sessionId: sid });
+      if (gen === refreshGen) {
+        webAgentLog.error(`useSessionMessages.refresh failed: ${e.message}`, { workspaceId: wid, sessionId: sid });
+      }
     } finally {
-      loading.value = false;
+      if (gen === refreshGen) {
+        loading.value = false;
+      }
     }
   }
 
-  // 两个 getter 都用 watch 监听,任一变化触发 refresh
-  // session/workspace 切换时先清空再 refresh,避免新 session 显示旧数据
-  watch(workspaceIdGetter, () => {
-    messages.value = [];
+  // 只监听 sessionId 变化即可:workspace 切换时 sessionId 一定会变(由 bindWorkspace 设置),
+  // 无需 workspaceId watcher 导致的双重 fetch。
+  watch(sessionIdGetter, (_new, _old) => {
+    // immediate 首次触发时(old===undefined)不清空(本来就是空的),
+    // 只在真正切换 session 时清空
+    if (_old !== undefined) {
+      messages.value = [];
+    }
     refresh();
   }, { immediate: true });
-
-  watch(sessionIdGetter, () => {
-    messages.value = [];
-    refresh();
-  });
 
   return { messages, loading, refresh };
 }
