@@ -1,4 +1,9 @@
-import type { ITool, ToolInputSchema, ToolExecutionContext } from '../types/tool';
+import type { ITool, ToolInputSchema, ToolExecutionContext } from '../../types/tool';
+import {
+  DELEGATE_TOOL_NAME,
+  DELEGATE_TOOL_DESCRIPTION,
+  DELEGATE_TOOL_USAGE,
+} from './prompt';
 
 const inputSchema: ToolInputSchema = {
   type: 'object',
@@ -10,9 +15,9 @@ const inputSchema: ToolInputSchema = {
 };
 
 export class DelegateTool implements ITool {
-  readonly name = 'delegate';
-  readonly description = 'Delegate a task to a sub-agent';
-  readonly usage = '<delegate agent="sub-agent-id" task="task description"/>';
+  readonly name = DELEGATE_TOOL_NAME;
+  readonly description = DELEGATE_TOOL_DESCRIPTION;
+  readonly usage = DELEGATE_TOOL_USAGE;
   readonly inputSchema = inputSchema;
 
   /** Session 会拦截委托并在后置处理中真正启动子 Agent */

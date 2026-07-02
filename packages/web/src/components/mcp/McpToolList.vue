@@ -14,7 +14,7 @@
 
 <script setup lang="ts">
 import { NList, NListItem, NText, NEmpty } from 'naive-ui'
-import type { McpToolInfo } from '@vibeeditor/agent'
+import type { McpToolInfo } from '@openwork/agent'
 
 defineProps<{
   tools: McpToolInfo[]

@@ -1,9 +1,9 @@
 {
-  "name": "vibeeditor",
+  "name": "openwork",
   "version": "0.1.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "VibeEditor - An AI-powered code editor with Monaco Editor, supporting both server and Electron deployment",
+  "description": "OpenWork - An AI-powered code editor with Monaco Editor, supporting both server and Electron deployment",
   "workspaces": [
     "packages/agent",
     "packages/server",

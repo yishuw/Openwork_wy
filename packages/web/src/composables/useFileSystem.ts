@@ -71,8 +71,8 @@ export function useFileSystem() {
   function getServerClient(): FileServiceClient {
     if (!serverClient.value) {
       let baseUrl = '';
-      if (typeof window !== 'undefined' && (window as any).__VIBE_SERVER_PORT__) {
-        baseUrl = `http://localhost:${(window as any).__VIBE_SERVER_PORT__}`;
+      if (typeof window !== 'undefined' && (window as any).__OPENWORK_SERVER_PORT__) {
+        baseUrl = `http://localhost:${(window as any).__OPENWORK_SERVER_PORT__}`;
       }
       serverClient.value = createServerClient(baseUrl);
     }
@@ -164,7 +164,7 @@ export function useFileSystem() {
    * 以单个文件为虚拟工作区，直接打开该文件。
    *
    * 与完整工作区（Open Folder）的区别：
-   * - 不调用服务端 /api/workspace/open（不创建 .vibeeditor 目录）
+   * - 不调用服务端 /api/workspace/open（不创建 .openwork 目录）
    * - 不加载文件树（工作区是虚拟的，无真实文件夹承载）
    * - 不持久化标签页状态
    * - workspaceId 为 null
@@ -201,7 +201,7 @@ export function useFileSystem() {
       store.workspaceRoots = [{ path: info.rootPath, name: info.rootName, mode, workspaceId: info.workspaceId }];
       store.activeWorkspaceId = info.workspaceId;
       const sessionStore = useSessionStore();
-      await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions);
+      await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions, info.rootPath);
     } catch {
       error.value = t('fs.singleFileWorkspaceFailed');
       return;
@@ -468,7 +468,7 @@ export function useFileSystem() {
         store.workspaceRoots = [{ path: info.rootPath, name: info.rootName, mode: 'local', workspaceId: info.workspaceId }];
         store.activeWorkspaceId = info.workspaceId;
         const sessionStore = useSessionStore();
-        await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions);
+        await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions, info.rootPath);
       } catch {
         error.value = t('fs.singleFileWorkspaceFailed');
         return;
@@ -501,7 +501,7 @@ export function useFileSystem() {
           store.workspaceRoots = [{ path: info.rootPath, name: info.rootName, mode: 'local', workspaceId: info.workspaceId }];
           store.activeWorkspaceId = info.workspaceId;
           const sessionStore = useSessionStore();
-          await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions);
+          await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions, info.rootPath);
         } catch {
           error.value = t('fs.singleFileWorkspaceFailed');
           return null;
@@ -566,7 +566,7 @@ export function useFileSystem() {
 
       // 绑定 Agent 会话到工作区
       const sessionStore = useSessionStore();
-      await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions);
+      await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions, info.rootPath);
 
       await loadDirectory('.');
 
@@ -634,7 +634,7 @@ export function useFileSystem() {
                   store.workspaceRoots = [{ path: info.rootPath, name: info.rootName, mode: 'local', workspaceId: info.workspaceId }];
                   store.activeWorkspaceId = info.workspaceId;
                   const sessionStore = useSessionStore();
-                  await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions);
+                  await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions, info.rootPath);
                 } catch {
                   error.value = t('fs.singleFileWorkspaceFailed');
                   return false;
@@ -657,7 +657,7 @@ export function useFileSystem() {
     }
   }
 
-  /** 保存当前工作区打开的标签页状态到 .vibeeditor/workspace.json */
+  /** 保存当前工作区打开的标签页状态到 .openwork/workspace.json */
   async function persistWorkspaceState() {
     const wsId = store.activeWorkspaceId;
     if (!wsId) return;
@@ -670,8 +670,12 @@ export function useFileSystem() {
       await client.updateWorkspace(wsId, {
         openTabs: tabInfos,
         activeTabPath,
+        workspaceRoot: store.workspaceRoot,
       });
-    } catch { /* 静默失败 */ }
+    } catch (e: any) {
+      // 不要静默失败 —— server 重启等场景下持久化失败需要可追踪
+      console.warn(`persistWorkspaceState failed: ${e.message}`);
+    }
   }
 
   /**

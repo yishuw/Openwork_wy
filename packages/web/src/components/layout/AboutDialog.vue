@@ -17,7 +17,7 @@
           </template>
         </n-descriptions-item>
         <n-descriptions-item :label="$t('about.repo')">
-          <n-a href="https://github.com/zbeeeeeeeeee/VibeEditor" target="_blank">github.com/zbeeeeeeeeee/VibeEditor</n-a>
+          <n-a href="https://github.com/zbeeeeeeeeee/OpenWork" target="_blank">github.com/zbeeeeeeeeee/OpenWork</n-a>
         </n-descriptions-item>
       </n-descriptions>
     </n-space>

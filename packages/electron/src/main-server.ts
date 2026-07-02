@@ -2,10 +2,10 @@ import { app, BrowserWindow, ipcMain, dialog, Menu, protocol } from 'electron';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { readFile } from 'fs/promises';
 import * as path from 'path';
-import { startServer } from '@vibeeditor/server';
+import { startServer } from '@openwork/server';
 import type { Server } from 'http';
 import { registerFileHandlers, clearWindowRoot } from './ipc/file-handler';
-import { createLogger, LOG_CATEGORY } from '@vibeeditor/agent';
+import { createLogger, LOG_CATEGORY } from '@openwork/agent';
 
 const log = createLogger(LOG_CATEGORY.ELECTRON);
 
@@ -68,7 +68,7 @@ const MIME_TYPES: Record<string, string> = {
 
 protocol.registerSchemesAsPrivileged([
   {
-    scheme: 'vibe',
+    scheme: 'openwork',
     privileges: {
       standard: true,
       secure: true,
@@ -81,23 +81,23 @@ function getMimeType(filePath: string): string {
   return MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
 }
 
-function resolveVibePath(url: string): string {
-  const pathPart = url.replace(/^vibe:\/\/app/, '').split(/[?#]/)[0];
+function resolveOpenworkPath(url: string): string {
+  const pathPart = url.replace(/^openwork:\/\/app/, '').split(/[?#]/)[0];
   const relativePath = decodeURIComponent(pathPart).replace(/\\/g, '/').replace(/^\/+/, '') || 'index.html';
   const filePath = path.resolve(WEB_DIST_DIR, relativePath);
   const webRoot = path.resolve(WEB_DIST_DIR);
 
   if (filePath !== webRoot && !filePath.startsWith(`${webRoot}${path.sep}`)) {
-    throw new Error('Invalid vibe protocol path');
+    throw new Error('Invalid openwork protocol path');
   }
 
   return filePath;
 }
 
-function registerVibeProtocol() {
-  protocol.handle('vibe', async (request) => {
+function registerOpenworkProtocol() {
+  protocol.handle('openwork', async (request) => {
     try {
-      const filePath = resolveVibePath(request.url);
+      const filePath = resolveOpenworkPath(request.url);
       const data = await readFile(filePath);
       return new Response(new Uint8Array(data), {
         headers: { 'Content-Type': getMimeType(filePath) },
@@ -220,7 +220,7 @@ function getLoadURL(workspacePath?: string, isFile?: boolean): string {
   } else if (!app.isPackaged) {
     baseURL = 'http://localhost:5173';
   } else {
-    baseURL = 'vibe://app/index.html';
+    baseURL = 'openwork://app/index.html';
   }
   if (workspacePath) {
     const param = isFile ? 'file' : 'workspace';
@@ -241,7 +241,7 @@ function createWindow(workspacePath?: string, isFile?: boolean) {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    title: 'VibeEditor',
+    title: 'OpenWork',
     backgroundColor: '#1e1e1e',
     frame: false,
     titleBarStyle: process.platform === 'darwin' ? 'hidden' : undefined,
@@ -273,7 +273,7 @@ function createWindow(workspacePath?: string, isFile?: boolean) {
   }
 
   win.webContents.on('did-finish-load', () => {
-    win.webContents.executeJavaScript(`window.__VIBE_SERVER_PORT__ = ${SERVER_PORT};`);
+    win.webContents.executeJavaScript(`window.__OPENWORK_SERVER_PORT__ = ${SERVER_PORT};`);
   });
 
   return win;
@@ -288,7 +288,7 @@ app.whenReady().then(() => {
       dialog.showErrorBox(
         'Port Conflict',
         `Could not start server on port ${SERVER_PORT}.\n` +
-        `The port is already in use. Make sure no other instance of VibeEditor is running.\n\n` +
+        `The port is already in use. Make sure no other instance of OpenWork is running.\n\n` +
         `You can change the port in app-config.json or by setting the SERVER_PORT environment variable.`
       );
     } else {
@@ -299,7 +299,7 @@ app.whenReady().then(() => {
   httpServer.on('listening', () => {
     log.info(`Server started on port ${SERVER_PORT}`, { port: SERVER_PORT, configDir: resolvedConfigDir });
 
-    registerVibeProtocol();
+    registerOpenworkProtocol();
     registerFileHandlers(ipcMain, dialog);
 
     ipcMain.handle('app:getInfo', () => appInfo);

@@ -1,4 +1,4 @@
-import type { McpServerConfig, McpServerEntry, McpToolInfo } from '@vibeeditor/agent';
+import type { McpServerConfig, McpServerEntry, McpToolInfo } from '@openwork/agent';
 import { i18n } from '../locales';
 
 declare const __SERVER_PORT__: number;

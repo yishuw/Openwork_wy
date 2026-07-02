@@ -1,4 +1,4 @@
-import type { McpServerEntry, McpToolInfo } from '@vibeeditor/agent';
+import type { McpServerEntry, McpToolInfo } from '@openwork/agent';
 
 /** MCP 服务器 UI 层表示，扩展 McpServerEntry 增加前端专属字段 */
 export interface McpServerUI extends McpServerEntry {

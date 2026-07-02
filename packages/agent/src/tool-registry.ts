@@ -40,6 +40,16 @@ export class ToolRegistry {
     return Array.from(this.tools.keys());
   }
 
+  /**
+   * 查询工具的 body 承载模式。
+   * - undefined：仅支持自闭合标签，无 body
+   * - 'content'：body = params.content（整段文本）
+   * - 'children'：body 由子标签 <key>val</key> 拆解为 params[key]
+   */
+  getBodyMode(name: string): 'content' | 'children' | undefined {
+    return this.tools.get(name)?.body;
+  }
+
   /** 生成 "## Available Tools" 系统提示词段落，包含参数描述和注解提示 */
   buildSystemPromptSection(): string {
     if (this.tools.size === 0) return '';

@@ -211,9 +211,9 @@ export const useEditorStore = defineStore('editor', () => {
     }
   };
 
-  /** 按路径激活标签页 */
+  /** 按路径激活标签页(使用与 openFile 一致的 pathsMatch 模糊匹配) */
   const setActiveTabByName = (filePath: string) => {
-    const tab = tabs.value.find(t => t.path === filePath);
+    const tab = tabs.value.find(t => pathsMatch(t.path, filePath, workspaceRoot.value));
     if (tab) {
       activeTabId.value = tab.id;
     }

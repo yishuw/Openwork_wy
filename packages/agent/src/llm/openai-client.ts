@@ -1,8 +1,8 @@
 import OpenAI from 'openai';
-import type { ILLMProvider } from './types/provider';
-import type { AgentConfig, AgentContext } from './types/agent';
-import { createLogger } from './logger';
-import { LOG_CATEGORY } from './log-categories';
+import type { ILLMProvider } from '../types/provider';
+import type { AgentConfig, AgentContext } from '../types/agent';
+import { createLogger } from '../logger';
+import { LOG_CATEGORY } from '../log-categories';
 
 const log = createLogger(LOG_CATEGORY.LLM);
 

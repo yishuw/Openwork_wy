@@ -1,19 +1,26 @@
 import { exec } from 'child_process';
-import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } from '../types/tool';
-import { createLogger } from '../logger';
-import { LOG_CATEGORY } from '../log-categories';
+import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } from '../../types/tool';
+import { createLogger } from '../../logger';
+import { LOG_CATEGORY } from '../../log-categories';
+import {
+  BASH_TOOL_NAME,
+  BASH_TOOL_DESCRIPTION,
+  BASH_TOOL_USAGE,
+  DEFAULT_TIMEOUT_MS,
+  MAX_TIMEOUT_MS,
+  MAX_OUTPUT_LENGTH,
+} from './prompt';
 
 const log = createLogger(LOG_CATEGORY.FILE_OPS);
-
-const DEFAULT_TIMEOUT_MS = 120_000;   // 2 minutes
-const MAX_TIMEOUT_MS = 600_000;       // 10 minutes
-const MAX_OUTPUT_LENGTH = 120_000;    // characters before truncation
 
 const inputSchema: ToolInputSchema = {
   type: 'object',
   properties: {
     command: { type: 'string', description: 'The command to execute' },
-    timeout: { type: 'string', description: `Optional timeout in milliseconds (max ${MAX_TIMEOUT_MS}, default ${DEFAULT_TIMEOUT_MS})` },
+    timeout: {
+      type: 'string',
+      description: `Optional timeout in milliseconds (max ${MAX_TIMEOUT_MS}, default ${DEFAULT_TIMEOUT_MS})`,
+    },
     description: { type: 'string', description: 'Description of what this command does (for logging)' },
   },
   required: ['command'],
@@ -27,9 +34,9 @@ const annotations: ToolAnnotations = {
 };
 
 export class BashTool implements ITool {
-  readonly name = 'bash';
-  readonly description = 'Execute a shell command in the project directory. Returns stdout and stderr. Long-running commands will be killed after timeout.';
-  readonly usage = '<bash command="..." [timeout="120000"] [description="..."]/>';
+  readonly name = BASH_TOOL_NAME;
+  readonly description = BASH_TOOL_DESCRIPTION;
+  readonly usage = BASH_TOOL_USAGE;
   readonly inputSchema = inputSchema;
   readonly annotations = annotations;
 

@@ -1,8 +1,13 @@
 import { readdirSync } from 'fs';
-import * as path from 'path';
-import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } from '../types/tool';
-import { createLogger } from '../logger';
-import { LOG_CATEGORY } from '../log-categories';
+import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } from '../../types/tool';
+import { createLogger } from '../../logger';
+import { LOG_CATEGORY } from '../../log-categories';
+import { resolvePath } from '../_shared/path';
+import {
+  LIST_DIR_TOOL_NAME,
+  LIST_DIR_TOOL_DESCRIPTION,
+  LIST_DIR_TOOL_USAGE,
+} from './prompt';
 
 const log = createLogger(LOG_CATEGORY.FILE_OPS);
 
@@ -19,18 +24,10 @@ const annotations: ToolAnnotations = {
   idempotentHint: true,
 };
 
-function resolvePath(root: string, target: string): string {
-  const abs = path.resolve(root, target);
-  if (!abs.startsWith(root + path.sep) && abs !== root) {
-    throw new Error(`Path traversal not allowed: ${target}`);
-  }
-  return abs;
-}
-
 export class ListDirTool implements ITool {
-  readonly name = 'list_dir';
-  readonly description = 'List directory contents';
-  readonly usage = '<list_dir path="path/to/dir"/>';
+  readonly name = LIST_DIR_TOOL_NAME;
+  readonly description = LIST_DIR_TOOL_DESCRIPTION;
+  readonly usage = LIST_DIR_TOOL_USAGE;
   readonly inputSchema = inputSchema;
   readonly annotations = annotations;
 

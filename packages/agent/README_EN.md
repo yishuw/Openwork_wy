@@ -1,13 +1,13 @@
-# @vibeeditor/agent
+# @openwork/agent
 
 > [中文](README.md)
 
-Standalone AI agent framework for VibeEditor — a unified agent runtime, LLM provider management, multi-turn tool-calling loop, MCP client, and edit execution.
+Standalone AI agent framework for OpenWork — a unified agent runtime, LLM provider management, multi-turn tool-calling loop, MCP client, and edit execution.
 
 ## Design principles
 
 - **Platform-agnostic**: decoupled from the file system via the `IAgentFileSystem` interface (`readFile` / `writeFile` / `exists` / `readDir`), runnable inside a Node.js server or the Electron main process
-- **No workspace dependencies**: depends on no other `@vibeeditor/*` package — only the `openai` SDK and the MCP SDK
+- **No workspace dependencies**: depends on no other `@openwork/*` package — only the `openai` SDK and the MCP SDK
 - **Single entry point**: only a small public surface (`AgentRuntime` etc.) is exported; internals (`Agent` / `Session` / tools) are not exposed directly
 
 ## Dependencies
@@ -108,7 +108,7 @@ Transports: **STDIO** (local subprocess) / **HTTP** (stateless POST) / **SSE** (
 ## Usage example
 
 ```typescript
-import { AgentRuntime, executeEdits } from '@vibeeditor/agent';
+import { AgentRuntime, executeEdits } from '@openwork/agent';
 
 // 1. Create the runtime (build mode: multi-turn tool loop)
 const runtime = new AgentRuntime({

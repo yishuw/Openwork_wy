@@ -42,7 +42,7 @@ function getLogFilePath(): string | null {
   const env = process.env.LOG_FILE;
   if (!env || env === '0' || env === 'false') return null;
   if (env === 'true' || env === '1') {
-    return path.resolve(process.cwd(), 'logs', 'vibeeditor.log');
+    return path.resolve(process.cwd(), 'logs', 'openwork.log');
   }
   return path.resolve(env);
 }

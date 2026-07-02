@@ -1,25 +1,25 @@
-# VibeEditor Desktop（Electron）
+# OpenWork Desktop（Electron）
 
 > [English](README_EN.md)
 
-VibeEditor 的 Electron 桌面壳 —— 加载 `@vibeeditor/web` 前端，并通过 IPC 桥接或内嵌服务端提供本地文件系统能力。
+OpenWork 的 Electron 桌面壳 —— 加载 `@openwork/web` 前端，并通过 IPC 桥接或内嵌服务端提供本地文件系统能力。
 
-> npm 包名为 `vibeeditor-desktop`（非 `@vibeeditor/electron`）。
+> npm 包名为 `openwork-desktop`（非 `@openwork/electron`）。
 
 ## 两个入口
 
 | 入口 | 说明 | 文件操作方式 |
 |------|------|--------------|
 | `main.ts`（默认，`main: dist/main.js`） | 标准桌面窗口，**不内嵌服务器** | 通过 Electron IPC（`ipc/file-handler.ts`）直接读写本地磁盘 |
-| `main-server.ts` | 启动时内嵌 `@vibeeditor/server`（`startServer`），含单实例锁、配置读写 IPC | 既有 IPC 文件操作，又对外提供完整 REST API（工作区 / Agent / LLM / MCP） |
+| `main-server.ts` | 启动时内嵌 `@openwork/server`（`startServer`），含单实例锁、配置读写 IPC | 既有 IPC 文件操作，又对外提供完整 REST API（工作区 / Agent / LLM / MCP） |
 
-两个入口共享相同的窗口构建、原生菜单、`vibe://` 协议与多窗口逻辑。
+两个入口共享相同的窗口构建、原生菜单、`openwork://` 协议与多窗口逻辑。
 
 ## 目录结构
 
 ```
 src/
-├── main.ts             # 标准入口：BrowserWindow、原生菜单、vibe:// 协议、多窗口、IPC 文件操作
+├── main.ts             # 标准入口：BrowserWindow、原生菜单、openwork:// 协议、多窗口、IPC 文件操作
 ├── main-server.ts      # 内嵌服务器入口：startServer + 单实例锁 + config:read/write + __VIBE_SERVER_PORT__
 ├── preload.ts          # Context Bridge，暴露 window.electronAPI
 └── ipc/file-handler.ts # file:* / dialog:* IPC 处理器（按窗口维护工作区根目录）
@@ -34,7 +34,7 @@ app-info.json           # 应用名称 / 版本 / 作者
 - **安全沙箱**：`contextIsolation: true`、`nodeIntegration: false`，所有原生能力经由 `preload.ts` 的 `window.electronAPI` 暴露
 - **加载来源**：
   - 开发：`VITE_DEV_SERVER_URL`（默认 `http://localhost:5173`）
-  - 生产：自定义 `vibe://app/index.html` 协议，从打包内的 `web-dist`（或 `web/dist`）读取前端资源
+  - 生产：自定义 `openwork://app/index.html` 协议，从打包内的 `web-dist`（或 `web/dist`）读取前端资源
 - **多窗口**：`window:create` 按工作区路径去重，已打开则聚焦，否则新建窗口
 
 ## 原生菜单
@@ -82,6 +82,6 @@ npm run dist:electron       # 生成完整安装程序
 
 ## 依赖
 
-- 工作区：`@vibeeditor/server`（`main-server.ts` 内嵌服务端）、`@vibeeditor/agent`（结构化日志）
+- 工作区：`@openwork/server`（`main-server.ts` 内嵌服务端）、`@openwork/agent`（结构化日志）
 - 运行时：`express` / `cors` / `openai` / `@modelcontextprotocol/sdk`（随内嵌服务端打包）
 - 构建：`electron`、`electron-builder`、`esbuild`

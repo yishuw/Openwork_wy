@@ -33,6 +33,16 @@ export interface ToolAnnotations {
 /** 工具执行上下文 */
 export interface ToolExecutionContext {
   workspaceRoot: string;
+  /**
+   * 本会话内已 read 过的文件路径集合(规范化后的绝对路径)。
+   * FileEditTool / FileWriteTool 用它做前置校验——
+   * 任何对**已存在**文件的写入都必须先 read,否则拒写。
+   *
+   * 故意只存路径不存 mtime/content:
+   * 这只是"会话内是否读过这个 path"的 bool 标记,
+   * 不引入 staleness 校验。
+   */
+  readFileState?: Set<string>;
 }
 
 /** 工具接口 —— 内置工具和 MCP 工具的统一契约 */
@@ -49,6 +59,16 @@ export interface ITool {
   readonly annotations?: ToolAnnotations;
   /** 执行属性（如 task 支持），MCP 工具透传 */
   readonly execution?: { taskSupport?: 'optional' | 'required' | 'forbidden' };
+  /**
+   * 工具调用时如何承载 body：
+   * - 不设（默认）：仅支持自闭合标签 `<tag attr="..."/>`，所有参数走属性
+   * - `'content'`：支持 `<tag attr="...">body 文本</tag>`，整段 body 文本注入到 params.content
+   * - `'children'`：支持 `<tag attr="..."><key>val</key>...</tag>`，子标签解析为 params[key]
+   *
+   * 'content' 适合承载长文本/代码内容（如 file_write 的文件内容），
+   * 'children' 适合承载多段文本参数（如 file_edit 的 old/new 两段代码）。
+   */
+  readonly body?: 'content' | 'children';
   /** 执行工具，返回注入到对话中的结果文本 */
   execute(params: Record<string, string>, context: ToolExecutionContext): Promise<string>;
 }

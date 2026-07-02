@@ -46,7 +46,7 @@ interface Window {
     registerWorkspace: (workspacePath: string) => Promise<void>;
   };
   /** Electron 主进程注入的服务器端口号 */
-  __VIBE_SERVER_PORT__?: number;
+  __OPENWORK_SERVER_PORT__?: number;
 }
 
 // 构建时从 app-info.json 注入的全局常量

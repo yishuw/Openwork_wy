@@ -1,13 +1,13 @@
-# @vibeeditor/agent
+# @openwork/agent
 
 > [English](README_EN.md)
 
-VibeEditor 独立 AI Agent 框架 —— 提供统一的 Agent 运行时、LLM 提供商管理、多轮工具调用循环、MCP 客户端与编辑执行能力。
+OpenWork 独立 AI Agent 框架 —— 提供统一的 Agent 运行时、LLM 提供商管理、多轮工具调用循环、MCP 客户端与编辑执行能力。
 
 ## 设计原则
 
 - **平台无关**：通过 `IAgentFileSystem` 接口（`readFile` / `writeFile` / `exists` / `readDir`）解耦文件系统，可在 Node.js 服务端或 Electron 主进程中运行
-- **零工作区依赖**：不依赖任何其它 `@vibeeditor/*` 包，仅依赖 `openai` SDK 与 MCP SDK
+- **零工作区依赖**：不依赖任何其它 `@openwork/*` 包，仅依赖 `openai` SDK 与 MCP SDK
 - **统一入口**：对外只暴露 `AgentRuntime` 等少量公共 API，内部实现（`Agent` / `Session` / 工具等）不直接暴露
 
 ## 依赖
@@ -123,7 +123,7 @@ src/
 ## 使用示例
 
 ```typescript
-import { AgentRuntime, executeEdits } from '@vibeeditor/agent';
+import { AgentRuntime, executeEdits } from '@openwork/agent';
 
 // 1. 创建 Runtime（build 模式：多轮工具循环）
 const runtime = new AgentRuntime({

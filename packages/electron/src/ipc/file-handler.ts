@@ -1,7 +1,7 @@
 import { IpcMain, Dialog, BrowserWindow } from 'electron';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { createLogger, LOG_CATEGORY } from '@vibeeditor/agent';
+import { createLogger, LOG_CATEGORY } from '@openwork/agent';
 
 const log = createLogger(LOG_CATEGORY.FILE_OPS);
 

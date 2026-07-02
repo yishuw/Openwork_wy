@@ -1,25 +1,25 @@
-# VibeEditor Desktop (Electron)
+# OpenWork Desktop (Electron)
 
 > [中文](README.md)
 
-The Electron desktop shell for VibeEditor — loads the `@vibeeditor/web` frontend and provides local file-system access via an IPC bridge or an embedded server.
+The Electron desktop shell for OpenWork — loads the `@openwork/web` frontend and provides local file-system access via an IPC bridge or an embedded server.
 
-> The npm package name is `vibeeditor-desktop` (not `@vibeeditor/electron`).
+> The npm package name is `openwork-desktop` (not `@openwork/electron`).
 
 ## Two entry points
 
 | Entry | Description | File operations |
 |-------|-------------|-----------------|
 | `main.ts` (default, `main: dist/main.js`) | Standard desktop window, **no embedded server** | Reads/writes local disk directly via Electron IPC (`ipc/file-handler.ts`) |
-| `main-server.ts` | Embeds `@vibeeditor/server` (`startServer`) at boot, with a single-instance lock and config read/write IPC | Both IPC file ops and a full REST API (workspace / agent / LLM / MCP) |
+| `main-server.ts` | Embeds `@openwork/server` (`startServer`) at boot, with a single-instance lock and config read/write IPC | Both IPC file ops and a full REST API (workspace / agent / LLM / MCP) |
 
-Both entries share the same window construction, native menu, `vibe://` protocol, and multi-window logic.
+Both entries share the same window construction, native menu, `openwork://` protocol, and multi-window logic.
 
 ## Directory layout
 
 ```
 src/
-├── main.ts             # Standard entry: BrowserWindow, native menu, vibe:// protocol, multi-window, IPC file ops
+├── main.ts             # Standard entry: BrowserWindow, native menu, openwork:// protocol, multi-window, IPC file ops
 ├── main-server.ts      # Embedded-server entry: startServer + single-instance lock + config:read/write + __VIBE_SERVER_PORT__
 ├── preload.ts          # Context bridge exposing window.electronAPI
 └── ipc/file-handler.ts # file:* / dialog:* IPC handlers (per-window workspace root)
@@ -34,7 +34,7 @@ app-info.json           # App name / version / authors
 - **Security sandbox**: `contextIsolation: true`, `nodeIntegration: false` — all native capabilities go through `window.electronAPI` from `preload.ts`
 - **Load source**:
   - Dev: `VITE_DEV_SERVER_URL` (default `http://localhost:5173`)
-  - Production: the custom `vibe://app/index.html` protocol, served from the bundled `web-dist` (or `web/dist`)
+  - Production: the custom `openwork://app/index.html` protocol, served from the bundled `web-dist` (or `web/dist`)
 - **Multi-window**: `window:create` de-duplicates by workspace path — focuses an existing window or opens a new one
 
 ## Native menu
@@ -82,6 +82,6 @@ Before packaging, `prepack` copies `app-info.json`, `app-config.json`, `provider
 
 ## Dependencies
 
-- Workspace: `@vibeeditor/server` (embedded server in `main-server.ts`), `@vibeeditor/agent` (structured logging)
+- Workspace: `@openwork/server` (embedded server in `main-server.ts`), `@openwork/agent` (structured logging)
 - Runtime: `express` / `cors` / `openai` / `@modelcontextprotocol/sdk` (bundled with the embedded server)
 - Build: `electron`, `electron-builder`, `esbuild`

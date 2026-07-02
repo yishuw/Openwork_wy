@@ -42,6 +42,8 @@ export interface AgentResult {
   content: string;
   turns: number;
   toolCalls: { type: string; params: Record<string, string> }[];
+  /** 流式期间累积的 thinking 文本(reasoning models) */
+  thinking?: string;
   error?: string;
 }
 

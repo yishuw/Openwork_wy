@@ -1,11 +1,15 @@
 import { Router, Request, Response } from 'express';
-import { AgentRuntime, type AgentRuntimeConfig, type AgentRuntimeEvent, type AgentContext, type AgentEditResult } from '@vibeeditor/agent';
-import { LocalFileSystem } from '../fs/local';
-import { executeEdits } from '@vibeeditor/agent';
-import { createLogger } from '@vibeeditor/agent';
+import {
+  AgentRuntime,
+  type AgentRuntimeConfig,
+  type AgentRuntimeEvent,
+  type AgentContext,
+  type IDESnapshot,
+} from '@openwork/agent';
+import { createLogger } from '@openwork/agent';
 import { loadEnabledMcpServers } from './mcp';
 import type { WorkspaceManager } from '../workspace/manager';
-import type { LLMGateway } from '@vibeeditor/agent';
+import type { LLMGateway } from '@openwork/agent';
 
 const log = createLogger('AgentRouter');
 
@@ -30,11 +34,15 @@ function buildRuntimeConfig(body: Record<string, unknown>, configDir: string, ll
     maxTokens: cfg.maxTokens,
     workspaceRoot: workspaceRoot || process.cwd(),
     mcpServers: mode === 'build' ? loadEnabledMcpServers(configDir) : undefined,
+    memoryTokenBudget: cfg.memoryTokenBudget ? Number(cfg.memoryTokenBudget) : undefined,
   };
 }
 
 interface StreamRequestBody {
   message: string;
+  /** build 模式:IDE 快照(激活文件 + 其他 tab 路径 + 文件树 + 光标/选区) */
+  ideSnapshot?: IDESnapshot;
+  /** plan 模式:沿用旧 AgentContext */
   context?: AgentContext;
   workspaceRoot?: string;
   workspaceId?: string;
@@ -45,16 +53,36 @@ interface StreamRequestBody {
 export function createAgentRouter(configDir: string, workspaceManager: WorkspaceManager, llmGateway: LLMGateway) {
   const router = Router();
 
-  function getRuntime(reqBody: Record<string, unknown>, workspaceRootOverride?: string): AgentRuntime {
+  async function getRuntime(reqBody: Record<string, unknown>, workspaceRootOverride?: string): Promise<AgentRuntime> {
     const body = reqBody as unknown as StreamRequestBody;
     // Reuse workspace-cached runtime when workspaceId is provided
     if (body.workspaceId) {
       const existing = workspaceManager.getRuntime(body.workspaceId);
       if (existing) return existing; // REUSE — MCP already connected
-      // Create new and cache it for future requests
-      const ws = workspaceManager.getWorkspaceData(body.workspaceId);
-      const wsRoot = ws?.rootPath ?? workspaceRootOverride ?? body.workspaceRoot;
-      const runtime = new AgentRuntime(buildRuntimeConfig(reqBody, configDir, llmGateway, wsRoot));
+
+      // Workspace not in memory (server restart / hot reload).
+      // Re-open from disk to restore sessions + workspace data.
+      const wsRoot = workspaceRootOverride ?? body.workspaceRoot;
+      if (wsRoot) {
+        try {
+          log.info(`Workspace ${body.workspaceId} not in memory, re-opening from ${wsRoot}`);
+          const data = await workspaceManager.openWorkspace(wsRoot, llmGateway);
+          // openWorkspace generates a new workspaceId if the old workspace.json
+          // doesn't have one. Use the returned workspaceId going forward.
+          // But the frontend still sends the old workspaceId — so we need to
+          // also make the old workspaceId work. The simplest way: if the
+          // re-opened workspace has a different ID, just use its runtime
+          // directly (the old ID is now stale but the runtime is fresh).
+          const runtime = workspaceManager.getRuntime(data.workspaceId);
+          if (runtime) return runtime;
+        } catch (e: any) {
+          log.warn(`Re-open workspace failed: ${e.message}`);
+        }
+      }
+
+      // Last resort: create a bare runtime (no restored sessions, no persistence)
+      const fallbackRoot = wsRoot || process.cwd();
+      const runtime = new AgentRuntime(buildRuntimeConfig(reqBody, configDir, llmGateway, fallbackRoot));
       workspaceManager.cacheRuntime(body.workspaceId, runtime);
       return runtime;
     }
@@ -65,26 +93,32 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
 
   router.post('/chat', async (req: Request, res: Response) => {
     try {
-      const { message, context, sessionId } = req.body;
+      const { message, context, ideSnapshot, sessionId } = req.body as StreamRequestBody;
       if (!message) {
         res.status(400).json({ error: 'message is required' });
         return;
       }
 
-      const runtime = getRuntime(req.body);
-
-      // Refresh MCP config for cached workspace runtimes
+      const runtime = await getRuntime(req.body);
       if (req.body.workspaceId) {
         const latestMcpServers = loadEnabledMcpServers(configDir);
         await runtime.reinitialize(latestMcpServers.length > 0 ? latestMcpServers : undefined);
       }
 
-      const result = await runtime.chat(message, context as AgentContext, sessionId || 'default');
+      // build 模式:走 ideSnapshot;plan 模式:走 context
+      const payload = ideSnapshot ?? context;
+      const result = await runtime.chat(message, payload as IDESnapshot | AgentContext, sessionId || 'default');
+
+      // 流结束后同步 session memory 到 workspace.json
+      if (req.body.workspaceId && sessionId) {
+        await workspaceManager.persistSessionMemory(req.body.workspaceId, sessionId);
+      }
 
       res.json({
         id: `agent_${Date.now()}`,
         role: 'assistant',
         content: result.content,
+        thinking: result.thinking,
         timestamp: Date.now(),
       });
     } catch (err) {
@@ -95,9 +129,9 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
 
   router.post('/stream', async (req: Request, res: Response) => {
     const body = req.body as StreamRequestBody;
-    const { message, context, workspaceRoot, workspaceId, sessionId } = body;
+    const { message, context, ideSnapshot, workspaceRoot, workspaceId, sessionId } = body;
     const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const reqLog = log.child({ requestId, mode: body.config?.mode || body.config?.mode });
+    const reqLog = log.child({ requestId, mode: body.config?.mode });
     reqLog.info(`Stream request started (workspaceId=${workspaceId || 'none'})`);
 
     if (!message) {
@@ -115,17 +149,14 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
       res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
-    const runtime = getRuntime(req.body, workspaceRoot);
+    const runtime = await getRuntime(req.body, workspaceRoot);
     const startMs = Date.now();
 
-    // Refresh MCP config from disk for cached workspace runtimes.
-    // The runtime may have been created before the user added/enabled MCP servers.
     if (body.workspaceId) {
       const latestMcpServers = loadEnabledMcpServers(configDir);
       await runtime.reinitialize(latestMcpServers.length > 0 ? latestMcpServers : undefined);
     }
 
-    // SSE keep-alive heartbeat to prevent proxy timeouts during long tool executions
     const keepAlive = setInterval(() => { res.write(': heartbeat\n\n'); }, 15000);
 
     try {
@@ -133,13 +164,15 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
       if (mcpStatus.serverCount > 0) {
         await runtime.initialize();
         reqLog.info(`MCP initialized: ${mcpStatus.serverCount} server(s), ${mcpStatus.toolCount} tool(s)`);
-        writeSSE({ tool_start: `🔌 MCP: ${mcpStatus.serverCount} server(s), ${mcpStatus.toolCount} tool(s)` });
+        writeSSE({ tool_start: { toolType: 'mcp', toolLabel: `MCP: ${mcpStatus.serverCount} server(s), ${mcpStatus.toolCount} tool(s)`, toolParams: {} } });
       }
 
       reqLog.info('Stream started');
+      // build 模式:走 ideSnapshot;plan 模式:走 context
+      const payload = ideSnapshot ?? context;
       const result = await runtime.chatStream(
         message,
-        context as AgentContext,
+        payload as IDESnapshot | AgentContext,
         (e: AgentRuntimeEvent) => {
           switch (e.type) {
             case 'chunk':
@@ -149,10 +182,10 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
               writeSSE({ thinking: e.text });
               break;
             case 'tool_start':
-              writeSSE({ tool_start: `🔍 ${e.toolName}: ${e.toolLabel || ''}` });
+              writeSSE({ tool_start: { toolType: e.toolName, toolLabel: e.toolLabel || '', toolParams: e.toolParams || {} } });
               break;
             case 'tool_end':
-              writeSSE({ tool_end: `${e.toolName} complete` });
+              writeSSE({ tool_end: { toolType: e.toolName, durationMs: e.durationMs || 0 } });
               break;
             case 'tool_result':
               writeSSE({ tool_result: { name: e.toolName, content: e.text } });
@@ -164,14 +197,22 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
               break;
           }
         },
-        undefined,  // signal — not used in SSE path currently
+        undefined,
         sessionId || 'default'
       );
-      if (result.edits.length > 0) {
-        reqLog.info(`Sending ${result.edits.length} edit(s) via SSE`);
-      }
+
       reqLog.info(`Stream done: ${Date.now() - startMs}ms, ${result.content.length} chars, ${result.toolCalls.length} tool calls`);
-      writeSSE({ done: true, edits: result.edits, toolCalls: result.toolCalls.length });
+
+      // 流结束 → 立即把 session memory 序列化并写入 workspace.json
+      if (workspaceId && sessionId) {
+        try {
+          await workspaceManager.persistSessionMemory(workspaceId, sessionId);
+        } catch (e: any) {
+          reqLog.warn(`persistSessionMemory failed: ${e.message}`);
+        }
+      }
+
+      writeSSE({ done: true, toolCalls: result.toolCalls.length });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       reqLog.error(`Stream error: ${msg}`);
@@ -179,34 +220,9 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
       writeSSE({ done: true });
     } finally {
       clearInterval(keepAlive);
-      // Only dispose throwaway runtimes, not workspace-cached ones
       if (!body.workspaceId) {
         try { await runtime.dispose(); } catch { /* ignore */ }
       }
-    }
-  });
-
-  router.post('/apply-edits', async (req: Request, res: Response) => {
-    try {
-      const { rootPath, edits } = req.body;
-
-      if (!rootPath || !edits) {
-        res.status(400).json({ error: 'rootPath and edits are required' });
-        return;
-      }
-
-      if (!Array.isArray(edits) || edits.length === 0) {
-        res.status(400).json({ error: 'edits must be a non-empty array' });
-        return;
-      }
-
-      const fs = new LocalFileSystem(rootPath);
-      const result = await executeEdits(fs, edits as AgentEditResult[]);
-
-      res.json(result);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: msg });
     }
   });
 

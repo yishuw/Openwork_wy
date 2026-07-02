@@ -1,10 +1,10 @@
-# VibeEditor
+# OpenWork
 
 > [English](README_EN.md)
 
 基于 **Monaco Editor** + **Vue 3** 的 AI 辅助代码编辑器，同时支持**服务器部署**和 **Electron 桌面端**。
 
-![VibeEditor Screenshot](images/app_ui.png)
+![OpenWork Screenshot](images/app_ui.png)
 
 ## 快速开始 · 构建与部署
 
@@ -23,7 +23,7 @@ npm install
 | **Server（前后端分离）** | `npm run dev:all` | 同时启动 Express 后端（`http://localhost:20385`）与 Vite 前端（`http://localhost:5173`），二者通过 `/api` 代理通信；适用于浏览器 / 远程部署场景 |
 | **Electron 桌面端** | `npm run dev:electron` | 自动启动 Vite 前端 + Electron 窗口；本地文件通过主进程 IPC 读写（`main.ts` 入口） |
 
-> 两条命令都会先自动构建 `@vibeeditor/agent`。
+> 两条命令都会先自动构建 `@openwork/agent`。
 
 如果只想**单独测试 Agent 模块**（不启动编辑器界面），可使用交互式 CLI：
 
@@ -80,9 +80,9 @@ npm run build:electron  # Electron 主进程
 |---|------|------|------|
 | 8 | Agent 对话面板 | ✅ | `AgentPanel.vue`, 支持 chat/edit/agent 三种模式、Markdown + KaTeX 渲染、多 Provider 配置管理 |
 | 9 | Agent 消息流式输出 (SSE) | ✅ | Server SSE + 前端 stream 解析已完整打通; 支持真实 LLM 流式响应 |
-| 10 | Agent 生成编辑操作并应用到文件 | ⚠️ | `<edit>` 区块解析 → 文件写入流程已打通; 服务端 `/api/agent/apply-edits` 端点已实现但前端未调用 `executor.ts`; 编辑/Agent 模式的 system prompt 在 `@vibeeditor/agent` 中被硬编码为 `chat` 模式 (Bug) |
-| 11 | Agent 上下文构建 (打开文件+光标+选区) | ✅ | `@vibeeditor/agent` — 上下文已在 Agent 消息构造内联组装; 但前端 `useAgent.ts` 未填充 `openFiles`, `fileTree` 等上下文到请求中 |
-| 12 | 编辑操作撤销/重做 | ⚠️ | `@vibeeditor/agent` — `revertEdits()` 已实现; 前端未接入 UI |
+| 10 | Agent 生成编辑操作并应用到文件 | ⚠️ | `<edit>` 区块解析 → 文件写入流程已打通; 服务端 `/api/agent/apply-edits` 端点已实现但前端未调用 `executor.ts`; 编辑/Agent 模式的 system prompt 在 `@openwork/agent` 中被硬编码为 `chat` 模式 (Bug) |
+| 11 | Agent 上下文构建 (打开文件+光标+选区) | ✅ | `@openwork/agent` — 上下文已在 Agent 消息构造内联组装; 但前端 `useAgent.ts` 未填充 `openFiles`, `fileTree` 等上下文到请求中 |
+| 12 | 编辑操作撤销/重做 | ⚠️ | `@openwork/agent` — `revertEdits()` 已实现; 前端未接入 UI |
 | 13 | LLM 后端对接 (OpenAI / Anthropic / etc.) | ⚠️ | 已通过 raw fetch 对接 OpenAI 兼容 API (支持 Ollama / vLLM 等); 无 SDK 依赖; 编辑/Agent 模式 system prompt 硬编码 bug (#10) 待修复 |
 
 ### P2 — 文件系统 & 项目管理
@@ -159,10 +159,10 @@ npm run build:electron  # Electron 主进程
 
 ```mermaid
 graph TD
-    agent["@vibeeditor/agent<br/>AI Agent 框架<br/><br/>· AgentRuntime（统一入口）<br/>· Agent / Session / ToolRegistry<br/>· LLMGateway / MCP Client (STDIO/HTTP/SSE)<br/>· executeEdits / parseEditsFromText"]
-    server["@vibeeditor/server<br/>Express 后端<br/><br/>· /api/files·agent·workspace·llm·mcp<br/>· LocalFileSystem（内置 fs/）<br/>· WorkspaceManager / 路径遍历防护"]
-    web["@vibeeditor/web<br/>Vue 3 前端<br/><br/>· Monaco Editor 封装 + 多格式查看器<br/>· AgentPanel 聊天 UI<br/>· useAgent / useFileSystem<br/>· agentService SSE 客户端"]
-    electron["vibeeditor-desktop<br/>Electron 桌面壳<br/><br/>· IPC 桥接 (preload.ts)<br/>· 原生文件对话框 / 菜单<br/>· main.ts / main-server.ts 双入口"]
+    agent["@openwork/agent<br/>AI Agent 框架<br/><br/>· AgentRuntime（统一入口）<br/>· Agent / Session / ToolRegistry<br/>· LLMGateway / MCP Client (STDIO/HTTP/SSE)<br/>· executeEdits / parseEditsFromText"]
+    server["@openwork/server<br/>Express 后端<br/><br/>· /api/files·agent·workspace·llm·mcp<br/>· LocalFileSystem（内置 fs/）<br/>· WorkspaceManager / 路径遍历防护"]
+    web["@openwork/web<br/>Vue 3 前端<br/><br/>· Monaco Editor 封装 + 多格式查看器<br/>· AgentPanel 聊天 UI<br/>· useAgent / useFileSystem<br/>· agentService SSE 客户端"]
+    electron["openwork-desktop<br/>Electron 桌面壳<br/><br/>· IPC 桥接 (preload.ts)<br/>· 原生文件对话框 / 菜单<br/>· main.ts / main-server.ts 双入口"]
 
     agent --> server
     agent --> web
@@ -170,23 +170,23 @@ graph TD
     server --> electron
 ```
 
-> 当前为 **4 个工作区包**（`agent` / `server` / `web` / `electron`），不存在 `@vibeeditor/core`。
+> 当前为 **4 个工作区包**（`agent` / `server` / `web` / `electron`），不存在 `@openwork/core`。
 
 **架构要点**：
-- **`@vibeeditor/agent`** 是核心模块，对外统一入口为 `AgentRuntime`；不依赖任何工作区包，通过 `IAgentFileSystem` 接口与平台解耦
-- **文件系统实现内聚在使用方**：`LocalFileSystem`/`FileEntry` 位于 `@vibeeditor/server` 的 `fs/`；浏览器 FSA 客户端与 REST 客户端位于 `@vibeeditor/web` 的 `fileService.ts`；编辑器标签类型（`EditorTab`）位于 `@vibeeditor/web` 的 Pinia store
-- **`@vibeeditor/server`** 依赖 `@vibeeditor/agent`，提供文件 / Agent / 工作区 / LLM / MCP 全套 REST·SSE API
-- **`vibeeditor-desktop`**（Electron）可内嵌 `@vibeeditor/server`（`main-server.ts`），或仅用 IPC 文件操作（`main.ts`）
+- **`@openwork/agent`** 是核心模块，对外统一入口为 `AgentRuntime`；不依赖任何工作区包，通过 `IAgentFileSystem` 接口与平台解耦
+- **文件系统实现内聚在使用方**：`LocalFileSystem`/`FileEntry` 位于 `@openwork/server` 的 `fs/`；浏览器 FSA 客户端与 REST 客户端位于 `@openwork/web` 的 `fileService.ts`；编辑器标签类型（`EditorTab`）位于 `@openwork/web` 的 Pinia store
+- **`@openwork/server`** 依赖 `@openwork/agent`，提供文件 / Agent / 工作区 / LLM / MCP 全套 REST·SSE API
+- **`openwork-desktop`**（Electron）可内嵌 `@openwork/server`（`main-server.ts`），或仅用 IPC 文件操作（`main.ts`）
 
 ### 2. 架构图 — 包依赖与部署拓扑
 
 ```mermaid
 graph TB
     subgraph Packages["npm Workspace 包"]
-        agent["@vibeeditor/agent<br/>AI Agent 框架 · AgentRuntime · LLM/MCP · 工具循环"]
-        server["@vibeeditor/server<br/>Express · REST/SSE · LocalFileSystem · 工作区"]
-        web["@vibeeditor/web<br/>Vue 3 · Vite · Monaco · naive-ui"]
-        electron["vibeeditor-desktop<br/>Electron 壳 · IPC 桥接 · 内嵌服务端"]
+        agent["@openwork/agent<br/>AI Agent 框架 · AgentRuntime · LLM/MCP · 工具循环"]
+        server["@openwork/server<br/>Express · REST/SSE · LocalFileSystem · 工作区"]
+        web["@openwork/web<br/>Vue 3 · Vite · Monaco · naive-ui"]
+        electron["openwork-desktop<br/>Electron 壳 · IPC 桥接 · 内嵌服务端"]
     end
 
     subgraph Runtime["运行时环境"]
@@ -207,7 +207,7 @@ graph TB
     web -->|File System Access API| browser
 ```
 
-**说明**：`@vibeeditor/agent` 是独立的 AI Agent 框架，对外统一入口为 `AgentRuntime`，提供 LLM Provider 管理、多轮工具循环、MCP 客户端与编辑执行。`@vibeeditor/server` 依赖 agent，并自带 `LocalFileSystem`（`fs/`）与工作区管理。前端 `web` 在开发时通过 Vite proxy 将 `/api` 转发到 `server`；Electron 模式下前端由 Electron 窗口加载，文件操作通过 `preload.ts` 暴露的 IPC 桥接到主进程，或由 `main-server.ts` 内嵌的 Express 服务端提供。
+**说明**：`@openwork/agent` 是独立的 AI Agent 框架，对外统一入口为 `AgentRuntime`，提供 LLM Provider 管理、多轮工具循环、MCP 客户端与编辑执行。`@openwork/server` 依赖 agent，并自带 `LocalFileSystem`（`fs/`）与工作区管理。前端 `web` 在开发时通过 Vite proxy 将 `/api` 转发到 `server`；Electron 模式下前端由 Electron 窗口加载，文件操作通过 `preload.ts` 暴露的 IPC 桥接到主进程，或由 `main-server.ts` 内嵌的 Express 服务端提供。
 
 ### 3. 流程图
 
@@ -243,7 +243,7 @@ flowchart TD
     EX --> RF["刷新编辑器 Tab + 文件树"]
 ```
 
-**说明**：Agent 逻辑全部在 `@vibeeditor/agent` 的 `AgentRuntime` 中执行（服务端持有实例）。`plan` 模式直接流式调用 LLM；`build` 模式运行多轮工具循环。最终 `done` 事件携带从回复中解析出的 `<edit>` 块；编辑通过 `executeEdits()` 写入文件系统。
+**说明**：Agent 逻辑全部在 `@openwork/agent` 的 `AgentRuntime` 中执行（服务端持有实例）。`plan` 模式直接流式调用 LLM；`build` 模式运行多轮工具循环。最终 `done` 事件携带从回复中解析出的 `<edit>` 块；编辑通过 `executeEdits()` 写入文件系统。
 
 ### 4. 时序图 — 工作区打开与 Agent 会话持久化
 
@@ -253,7 +253,7 @@ sequenceDiagram
     participant Web as Web (fileService)
     participant Server as Server (/api/workspace)
     participant WM as WorkspaceManager
-    participant Disk as .vibeeditor/workspace.json
+    participant Disk as .openwork/workspace.json
 
     User->>Web: 打开文件夹
     Web->>Server: POST /api/workspace/open { rootPath }
@@ -275,7 +275,7 @@ sequenceDiagram
     Server->>WM: 持久化数据，释放 Runtime / MCP 连接
 ```
 
-**说明**：服务端通过 `workspaceId` 复用 `AgentRuntime`（含 MCP 连接），Agent 对话历史随工作区数据持久化到工作区目录下的 `.vibeeditor/workspace.json`，关闭后重新打开即可恢复标签页与会话。
+**说明**：服务端通过 `workspaceId` 复用 `AgentRuntime`（含 MCP 连接），Agent 对话历史随工作区数据持久化到工作区目录下的 `.openwork/workspace.json`，关闭后重新打开即可恢复标签页与会话。
 
 ### 5. 核心类型概览
 
@@ -283,11 +283,11 @@ sequenceDiagram
 
 | 接口/类 | 所在包 | 说明 |
 |----------|--------|------|
-| `IAgentFileSystem` | `@vibeeditor/agent` | 最小化文件系统接口（readFile / writeFile / exists / readDir） |
-| `IFileSystem` / `LocalFileSystem` | `@vibeeditor/server` | 服务端文件系统接口与 Node.js `fs/promises` 实现（`fs/`） |
-| `FileServiceClient` | `@vibeeditor/web` | 前端统一文件客户端接口（Electron IPC / Server REST / Browser FSA 三实现） |
+| `IAgentFileSystem` | `@openwork/agent` | 最小化文件系统接口（readFile / writeFile / exists / readDir） |
+| `IFileSystem` / `LocalFileSystem` | `@openwork/server` | 服务端文件系统接口与 Node.js `fs/promises` 实现（`fs/`） |
+| `FileServiceClient` | `@openwork/web` | 前端统一文件客户端接口（Electron IPC / Server REST / Browser FSA 三实现） |
 
-**Agent / AI 层（均在 `@vibeeditor/agent`）：**
+**Agent / AI 层（均在 `@openwork/agent`）：**
 
 | 接口/类 | 说明 |
 |----------|------|
@@ -302,10 +302,10 @@ sequenceDiagram
 
 | 接口/类 | 所在包 | 说明 |
 |----------|--------|------|
-| `AgentContext` | `@vibeeditor/agent` | Agent 上下文（openFiles / fileTree / cursorPosition 等） |
-| `ParsedEdit` / `AgentEditResult` | `@vibeeditor/agent` | 解析出的编辑块 / 待应用的编辑结果 |
-| `EditorTab` / `ViewMode` | `@vibeeditor/web` | 标签页（含 viewMode 渲染器选择，定义于 `stores/editor.ts`） |
-| `EditorStore` | `@vibeeditor/web` | Pinia store —— 前端唯一状态源（tabs / fileTree / workspace） |
+| `AgentContext` | `@openwork/agent` | Agent 上下文（openFiles / fileTree / cursorPosition 等） |
+| `ParsedEdit` / `AgentEditResult` | `@openwork/agent` | 解析出的编辑块 / 待应用的编辑结果 |
+| `EditorTab` / `ViewMode` | `@openwork/web` | 标签页（含 viewMode 渲染器选择，定义于 `stores/editor.ts`） |
+| `EditorStore` | `@openwork/web` | Pinia store —— 前端唯一状态源（tabs / fileTree / workspace） |
 
 ## 服务端 API
 
@@ -337,7 +337,7 @@ sequenceDiagram
 
 ## MCP (Model Context Protocol) 支持
 
-VibeEditor 内置完整的 MCP 客户端，支持通过标准协议接入外部工具。
+OpenWork 内置完整的 MCP 客户端，支持通过标准协议接入外部工具。
 
 **传输模式：**
 
@@ -392,12 +392,12 @@ tools.forEach(t => agent.registerTool(t));
 
 | 包 | 角色 | 关键内容 | 详细文档 |
 |----|------|----------|----------|
-| `@vibeeditor/agent` | AI Agent 框架 | `AgentRuntime`（统一入口）、`Agent`/`Session`、5 个默认工具、`McpManager`、`LLMGateway`、`executeEdits`/`parseEditsFromText`、结构化日志、CLI | [packages/agent/README.md](packages/agent/README.md) |
-| `@vibeeditor/server` | Express 后端 | `createApp`/`startServer`、`fs/`（`LocalFileSystem`）、`routes/`（files·agent·workspace·llm·mcp·config）、`WorkspaceManager`、请求日志中间件 | [packages/server/README.md](packages/server/README.md) |
-| `@vibeeditor/web` | Vue 3 前端 | `MonacoEditor` + 多格式查看器、`AgentPanel`、文件树、MCP/设置面板、`composables/`、`services/`（`fileService` 等）、`stores/`（editor/sessions/settings）、i18n | [packages/web/README.md](packages/web/README.md) |
-| `vibeeditor-desktop` | Electron 桌面壳 | `main.ts`/`main-server.ts` 双入口、`preload.ts`（`window.electronAPI`）、`ipc/file-handler.ts`、原生菜单、`vibe://` 协议 | [packages/electron/README.md](packages/electron/README.md) |
+| `@openwork/agent` | AI Agent 框架 | `AgentRuntime`（统一入口）、`Agent`/`Session`、5 个默认工具、`McpManager`、`LLMGateway`、`executeEdits`/`parseEditsFromText`、结构化日志、CLI | [packages/agent/README.md](packages/agent/README.md) |
+| `@openwork/server` | Express 后端 | `createApp`/`startServer`、`fs/`（`LocalFileSystem`）、`routes/`（files·agent·workspace·llm·mcp·config）、`WorkspaceManager`、请求日志中间件 | [packages/server/README.md](packages/server/README.md) |
+| `@openwork/web` | Vue 3 前端 | `MonacoEditor` + 多格式查看器、`AgentPanel`、文件树、MCP/设置面板、`composables/`、`services/`（`fileService` 等）、`stores/`（editor/sessions/settings）、i18n | [packages/web/README.md](packages/web/README.md) |
+| `openwork-desktop` | Electron 桌面壳 | `main.ts`/`main-server.ts` 双入口、`preload.ts`（`window.electronAPI`）、`ipc/file-handler.ts`、原生菜单、`vibe://` 协议 | [packages/electron/README.md](packages/electron/README.md) |
 
-> 说明：早期文档中的 `@vibeeditor/core` 已不存在 —— 文件系统实现（`LocalFileSystem`/`FileEntry`）已并入 `@vibeeditor/server` 的 `fs/`，编辑器标签类型已并入 `@vibeeditor/web` 的 Pinia store。
+> 说明：早期文档中的 `@openwork/core` 已不存在 —— 文件系统实现（`LocalFileSystem`/`FileEntry`）已并入 `@openwork/server` 的 `fs/`，编辑器标签类型已并入 `@openwork/web` 的 Pinia store。
 
 ---
 

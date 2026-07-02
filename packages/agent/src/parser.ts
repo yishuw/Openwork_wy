@@ -1,80 +1,77 @@
+import type { ToolRegistry } from './tool-registry';
+
 /** 从 LLM 回复中解析出的工具调用 */
 export interface ParsedTool {
   type: string;
   params: Record<string, string>;
 }
 
-/** 解析出的编辑块 */
-export interface ParsedEdit {
-  path: string;
-  content: string;
-}
-
 /**
- * 从 LLM 回复文本中解析工具调用标签
+ * 从 LLM 回复文本中解析工具调用标签。
  *
- * 支持的 XML 标签格式：
- *   <read_file path="src/app.ts"/>
- *   <list_dir path="src/"/>
- *   <search_code pattern="function" path="src/" maxResults="20"/>
- *   <delegate agent="sub-agent-id" task="task description"/>
+ * 支持三种语法形：
+ *   1. 自闭标签：<read_file path="src/app.ts"/>
+ *   2. content body：<file_write path="src/foo.ts">full file here</file_write>
+ *   3. children body：<file_edit path="x"><old>...</old><new>...</new></file_edit>
+ *
+ * 哪种语法有效取决于工具本身的 `body` 声明（通过 ToolRegistry.getBodyMode 查询）。
+ * 解析策略：先尝试匹配带闭合标签的形式，再回退到自闭合形式。
  */
-export function parseToolCalls(text: string, registeredTags?: string[]): ParsedTool[] {
+export function parseToolCalls(text: string, registry: ToolRegistry): ParsedTool[] {
   const tools: ParsedTool[] = [];
-  const re = /<(\w+) ([^>]+)?\s*\/?>/g;
-  let match: RegExpExecArray | null;
+  const seen = new Set<number>();
 
-  while ((match = re.exec(text)) !== null) {
-    const tag = match[1];
-    if (tag === 'edit') continue;
-    const attrStr = match[2] || '';
-
-    const params: Record<string, string> = {};
-    const attrRe = /(\w+)="([^"]*)"/g;
-    let attrMatch: RegExpExecArray | null;
-    while ((attrMatch = attrRe.exec(attrStr)) !== null) {
-      params[attrMatch[1]] = attrMatch[2];
+  // 先匹配带 body 的标签：<tag attrs>...</tag>
+  // body 支持跨多行;[\\s\\S]*? 非贪婪避免一次吃到文件结尾
+  const bodyRe = /<(\w+)([^>]*?)>([\s\S]*?)<\/\1\s*>/g;
+  let m: RegExpExecArray | null;
+  while ((m = bodyRe.exec(text)) !== null) {
+    const tag = m[1];
+    const attrStr = m[2] || '';
+    const body = m[3] ?? '';
+    const bodyMode = registry.getBodyMode(tag);
+    if (!bodyMode) {
+      // 工具不支持 body —— 跳过,留给自闭合扫描处理
+      continue;
     }
+    const params = parseAttrs(attrStr);
+    if (bodyMode === 'content') {
+      params.content = body;
+    } else {
+      // children 模式:从 body 中提取所有 <key>value</key>
+      const childRe = /<(\w+)>([\s\S]*?)<\/\1\s*>/g;
+      let cm: RegExpExecArray | null;
+      while ((cm = childRe.exec(body)) !== null) {
+        params[cm[1]] = cm[2] ?? '';
+      }
+    }
+    // 用整体匹配的索引去重,防止自闭合再扫一次产生重复
+    seen.add(m.index);
+    tools.push({ type: tag, params });
+  }
 
-    if (registeredTags && !registeredTags.includes(tag)) continue;
+  // 再匹配自闭合标签:<tag attr="..." />
+  // 避开已识别为带 body 的位置
+  const selfRe = /<(\w+)([^>]*?)\s*\/>/g;
+  while ((m = selfRe.exec(text)) !== null) {
+    if (seen.has(m.index)) continue;
+    const tag = m[1];
+    if (!registry.has(tag)) continue;
+    const params = parseAttrs(m[2] || '');
     tools.push({ type: tag, params });
   }
 
   return tools;
 }
 
-function isPlaceholderPath(p: string): boolean {
-  const placeholders = ['path/to/file', 'path/to/File'];
-  if (placeholders.includes(p)) return true;
-  if (/^path\/to\/\w+$/i.test(p)) return true;
-  return false;
-}
-
-/**
- * 从 LLM 回复中解析 <edit path="...">...</edit> 编辑块
- *
- * 相同路径的编辑块会去重，保留最后一个（后面的覆盖前面的）。
- */
-export function parseEditsFromText(text: string): ParsedEdit[] {
-  const editMap = new Map<string, ParsedEdit>();
-  const re = /<edit\s+path="([^"]+)"\s*>([\s\S]*?)<\/edit>/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = re.exec(text)) !== null) {
-    const filePath = match[1].trim();
-    if (isPlaceholderPath(filePath)) continue;
-    let rawContent = match[2].trim();
-
-    const codeBlockRe = /^```[\w]*\n([\s\S]*?)\n```$/;
-    const codeBlockMatch = rawContent.match(codeBlockRe);
-    if (codeBlockMatch) {
-      rawContent = codeBlockMatch[1];
-    }
-
-    // 按规范化路径去重（Windows 不区分大小写）
-    const key = process.platform === 'win32' ? filePath.toLowerCase() : filePath;
-    editMap.set(key, { path: filePath, content: rawContent });
+/** 解析属性字符串 `path="x" max="3"` 为 {path:"x",max:"3"} */
+function parseAttrs(attrStr: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  const attrRe = /(\w+)="([^"]*)"/g;
+  let am: RegExpExecArray | null;
+  while ((am = attrRe.exec(attrStr)) !== null) {
+    params[am[1]] = am[2];
   }
-
-  return Array.from(editMap.values());
+  return params;
 }
+

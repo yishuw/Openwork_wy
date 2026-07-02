@@ -1,5 +1,7 @@
-import type { AgentContext, AgentResult, SessionMessage } from './types/agent';
-import { Agent, type AgentEvent, type AgentEventCallback } from './agent';
+import type { AgentResult } from './types/agent';
+import type { IDESnapshot, DisplayMessage, SerializedSessionMemory, ToolCallRecord } from './memory';
+import { SessionMemory } from './memory';
+import { Agent, type AgentEvent, type AgentEventCallback, type ToolCallReportCallback } from './agent';
 import { createLogger } from './logger';
 import { LOG_CATEGORY } from './log-categories';
 
@@ -19,6 +21,10 @@ export interface SessionEvent {
   data?: string;
   toolType?: string;
   toolLabel?: string;
+  /** 工具调用参数(tool_start 时携带) */
+  toolParams?: Record<string, string>;
+  /** 工具执行耗时(tool_end 时携带) */
+  durationMs?: number;
 }
 
 export type SessionEventCallback = (event: SessionEvent) => void;
@@ -27,11 +33,13 @@ export class Session {
   readonly id: string;
   private mainAgent: Agent;
   private subAgents: Map<string, Agent> = new Map();
-  messages: SessionMessage[] = [];
+  /** 替代旧的 messages: SessionMessage[] —— 结构化记忆模块 */
+  readonly memory: SessionMemory;
 
-  constructor(id: string, mainAgent: Agent) {
+  constructor(id: string, mainAgent: Agent, memory?: SessionMemory) {
     this.id = id;
     this.mainAgent = mainAgent;
+    this.memory = memory ?? new SessionMemory(id);
   }
 
   /** 注册子 Agent */
@@ -39,10 +47,10 @@ export class Session {
     this.subAgents.set(agent.definition.id, agent);
   }
 
-  /** 启动主 Agent 处理用户消息（非流式） */
+  /** 启动主 Agent 处理用户消息(非流式) */
   async start(
     message: string,
-    context: AgentContext,
+    ideSnapshot: IDESnapshot | undefined,
     onEvent?: SessionEventCallback
   ): Promise<SessionResult> {
     const emit = (e: SessionEvent) => onEvent?.(e);
@@ -50,45 +58,33 @@ export class Session {
 
     log.info(`Session start: sessionId=${this.id}, agentId=${this.mainAgent.definition.id}`);
 
-    this.messages.push({
-      id: this.nextId(),
-      role: 'user',
-      content: message,
-      timestamp: Date.now(),
-    });
+    this.memory.appendUserMessage(message);
 
-    const mainResult = await this.runAgent(this.mainAgent, message, context, emit);
+    const result = await this.runAgent(this.mainAgent, message, ideSnapshot, emit);
+    await this.memoryFinalize(result, this.mainAgent.definition.id);
 
-    this.messages.push({
-      id: this.nextId(),
-      role: 'agent',
-      agentId: this.mainAgent.definition.id,
-      content: mainResult.content,
-      timestamp: Date.now(),
-    });
-
-    const subResults = await this.handleDelegation(mainResult, context, emit);
+    const subResults = await this.handleDelegation(result, ideSnapshot, emit);
 
     emit({ type: 'done' });
 
-    log.info(`Session done: ${mainResult.turns} turns, ${subResults.length} sub-agent(s), ${Date.now() - startMs}ms`, {
+    log.info(`Session done: ${result.turns} turns, ${subResults.length} sub-agent(s), ${Date.now() - startMs}ms`, {
       sessionId: this.id,
-      turns: mainResult.turns,
+      turns: result.turns,
       subAgents: subResults.length,
-      contentLen: mainResult.content.length,
+      contentLen: result.content.length,
     });
 
     return {
       sessionId: this.id,
-      mainResult,
+      mainResult: result,
       subResults,
     };
   }
 
-  /** 启动主 Agent 处理用户消息（流式） */
+  /** 启动主 Agent 处理用户消息(流式) */
   async startStream(
     message: string,
-    context: AgentContext,
+    ideSnapshot: IDESnapshot | undefined,
     onEvent?: SessionEventCallback,
     signal?: AbortSignal
   ): Promise<SessionResult> {
@@ -97,37 +93,25 @@ export class Session {
 
     log.info(`Session stream start: sessionId=${this.id}, agentId=${this.mainAgent.definition.id}`);
 
-    this.messages.push({
-      id: this.nextId(),
-      role: 'user',
-      content: message,
-      timestamp: Date.now(),
-    });
+    this.memory.appendUserMessage(message);
 
-    const mainResult = await this.runAgentStream(this.mainAgent, message, context, emit, signal);
+    const result = await this.runAgentStream(this.mainAgent, message, ideSnapshot, emit, signal);
+    await this.memoryFinalize(result, this.mainAgent.definition.id);
 
-    this.messages.push({
-      id: this.nextId(),
-      role: 'agent',
-      agentId: this.mainAgent.definition.id,
-      content: mainResult.content,
-      timestamp: Date.now(),
-    });
-
-    const subResults = await this.handleDelegation(mainResult, context, emit);
+    const subResults = await this.handleDelegation(result, ideSnapshot, emit);
 
     emit({ type: 'done' });
 
-    log.info(`Session stream done: ${mainResult.turns} turns, ${subResults.length} sub-agent(s), ${Date.now() - startMs}ms`, {
+    log.info(`Session stream done: ${result.turns} turns, ${subResults.length} sub-agent(s), ${Date.now() - startMs}ms`, {
       sessionId: this.id,
-      turns: mainResult.turns,
+      turns: result.turns,
       subAgents: subResults.length,
-      contentLen: mainResult.content.length,
+      contentLen: result.content.length,
     });
 
     return {
       sessionId: this.id,
-      mainResult,
+      mainResult: result,
       subResults,
     };
   }
@@ -136,32 +120,64 @@ export class Session {
   async delegateToSubAgent(
     agentId: string,
     task: string,
-    context: AgentContext,
+    ideSnapshot: IDESnapshot | undefined,
     onEvent?: AgentEventCallback
   ): Promise<AgentResult> {
     const agent = this.subAgents.get(agentId);
     if (!agent) throw new Error(`Sub-agent "${agentId}" not found`);
 
-    const result = await agent.execute(task, context, onEvent);
+    // 子 agent 执行时构造一份消息:基于主 memory 投影,加上当前 task
+    const llmMessages = this.memory.projectToLLMMessages(
+      agent.getSystemPrompt(),
+      agent.getToolsSection(),
+      agent.getWorkspaceRoot(),
+      ideSnapshot,
+      task,
+    );
 
-    this.messages.push({
-      id: this.nextId(),
-      role: 'agent',
-      agentId,
+    const toolReport: ToolCallReportCallback = (tc) => {
+      this.memory.appendToolResult({ ...tc, agentId, parentAgentId: this.mainAgent.definition.id });
+    };
+
+    const result = await agent.execute(llmMessages, onEvent, toolReport);
+    this.memory.appendAssistantMessage({
       content: result.content,
-      timestamp: Date.now(),
+      thinking: result.thinking,
+      agentId,
+      parentAgentId: this.mainAgent.definition.id,
     });
-
     return result;
+  }
+
+  /** 把 AgentResult 落到 memory(主 agent 的 assistant 消息) */
+  private async memoryFinalize(result: AgentResult, agentId: string): Promise<void> {
+    this.memory.appendAssistantMessage({
+      content: result.content,
+      thinking: result.thinking,
+      agentId,
+      error: !!result.error,
+    });
   }
 
   private async runAgent(
     agent: Agent,
     message: string,
-    context: AgentContext,
+    ideSnapshot: IDESnapshot | undefined,
     emit: SessionEventCallback
   ): Promise<AgentResult> {
-    return agent.execute(message, context, (e: AgentEvent) => {
+    const llmMessages = this.memory.projectToLLMMessages(
+      agent.getSystemPrompt(),
+      agent.getToolsSection(),
+      agent.getWorkspaceRoot(),
+      ideSnapshot,
+      message,
+    );
+
+    const toolReport: ToolCallReportCallback = (tc) => {
+      this.memory.appendToolResult(tc);
+    };
+
+    return agent.execute(llmMessages, (e: AgentEvent) => {
       switch (e.type) {
         case 'chunk':
           emit({ type: 'chunk', agentId: agent.definition.id, data: e.text });
@@ -170,26 +186,38 @@ export class Session {
           emit({ type: 'thinking', agentId: agent.definition.id, data: e.text });
           break;
         case 'tool_start':
-          emit({ type: 'tool_start', agentId: agent.definition.id, toolType: e.toolType, toolLabel: e.toolLabel });
+          emit({ type: 'tool_start', agentId: agent.definition.id, toolType: e.toolType, toolLabel: e.toolLabel, toolParams: e.toolParams });
           break;
         case 'tool_end':
-          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType });
+          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType, durationMs: e.durationMs });
           break;
         case 'tool_result':
           emit({ type: 'tool_result', agentId: agent.definition.id, toolType: e.toolType, data: e.text });
           break;
       }
-    });
+    }, toolReport);
   }
 
   private async runAgentStream(
     agent: Agent,
     message: string,
-    context: AgentContext,
+    ideSnapshot: IDESnapshot | undefined,
     emit: SessionEventCallback,
     signal?: AbortSignal
   ): Promise<AgentResult> {
-    return agent.executeStream(message, context, (e: AgentEvent) => {
+    const llmMessages = this.memory.projectToLLMMessages(
+      agent.getSystemPrompt(),
+      agent.getToolsSection(),
+      agent.getWorkspaceRoot(),
+      ideSnapshot,
+      message,
+    );
+
+    const toolReport: ToolCallReportCallback = (tc) => {
+      this.memory.appendToolResult(tc);
+    };
+
+    return agent.executeStream(llmMessages, (e: AgentEvent) => {
       switch (e.type) {
         case 'chunk':
           emit({ type: 'chunk', agentId: agent.definition.id, data: e.text });
@@ -198,22 +226,22 @@ export class Session {
           emit({ type: 'thinking', agentId: agent.definition.id, data: e.text });
           break;
         case 'tool_start':
-          emit({ type: 'tool_start', agentId: agent.definition.id, toolType: e.toolType, toolLabel: e.toolLabel });
+          emit({ type: 'tool_start', agentId: agent.definition.id, toolType: e.toolType, toolLabel: e.toolLabel, toolParams: e.toolParams });
           break;
         case 'tool_end':
-          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType });
+          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType, durationMs: e.durationMs });
           break;
         case 'tool_result':
           emit({ type: 'tool_result', agentId: agent.definition.id, toolType: e.toolType, data: e.text });
           break;
       }
-    }, signal);
+    }, toolReport, signal);
   }
 
   /** 从主 Agent 结果中解析委托指令并启动子 Agent */
   private async handleDelegation(
     mainResult: AgentResult,
-    context: AgentContext,
+    ideSnapshot: IDESnapshot | undefined,
     emit: SessionEventCallback
   ): Promise<AgentResult[]> {
     const subResults: AgentResult[] = [];
@@ -228,7 +256,7 @@ export class Session {
       log.info(`Sub-agent delegation: agentId=${agentId}, task="${task.slice(0, 100)}"`);
       emit({ type: 'sub_agent_start', agentId });
 
-      const subResult = await this.delegateToSubAgent(agentId, task, context);
+      const subResult = await this.delegateToSubAgent(agentId, task, ideSnapshot);
       subResults.push(subResult);
 
       log.info(`Sub-agent done: agentId=${agentId}, ${subResult.content.length} chars, ${subResult.turns} turns`);
@@ -236,9 +264,5 @@ export class Session {
     }
 
     return subResults;
-  }
-
-  private nextId(): string {
-    return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   }
 }

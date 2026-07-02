@@ -1,8 +1,14 @@
 import { readFileSync, readdirSync } from 'fs';
 import * as path from 'path';
-import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } from '../types/tool';
-import { createLogger } from '../logger';
-import { LOG_CATEGORY } from '../log-categories';
+import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } from '../../types/tool';
+import { createLogger } from '../../logger';
+import { LOG_CATEGORY } from '../../log-categories';
+import { resolvePath } from '../_shared/path';
+import {
+  SEARCH_CODE_TOOL_NAME,
+  SEARCH_CODE_TOOL_DESCRIPTION,
+  SEARCH_CODE_TOOL_USAGE,
+} from './prompt';
 
 const log = createLogger(LOG_CATEGORY.FILE_OPS);
 
@@ -22,20 +28,12 @@ const annotations: ToolAnnotations = {
   openWorldHint: false,
 };
 
-function resolvePath(root: string, target: string): string {
-  const abs = path.resolve(root, target);
-  if (!abs.startsWith(root + path.sep) && abs !== root) {
-    throw new Error(`Path traversal not allowed: ${target}`);
-  }
-  return abs;
-}
-
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.vibeeditor']);
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.openwork']);
 
 export class SearchCodeTool implements ITool {
-  readonly name = 'search_code';
-  readonly description = 'Search code with regex pattern';
-  readonly usage = '<search_code pattern="regex" [path="dir" maxResults="20"]/>';
+  readonly name = SEARCH_CODE_TOOL_NAME;
+  readonly description = SEARCH_CODE_TOOL_DESCRIPTION;
+  readonly usage = SEARCH_CODE_TOOL_USAGE;
   readonly inputSchema = inputSchema;
   readonly annotations = annotations;
 
@@ -45,7 +43,6 @@ export class SearchCodeTool implements ITool {
     const maxResults = parseInt(params.maxResults || '20');
     const startMs = Date.now();
 
-    // Resolve search path — if absolute, validate it; if relative, resolve against workspaceRoot
     const rootPath = context.workspaceRoot;
     const absSearchPath = resolvePath(rootPath, searchPath);
 
@@ -68,7 +65,6 @@ export class SearchCodeTool implements ITool {
         for (let i = 0; i < lines.length && count < maxResults; i++) {
           if (regex.test(lines[i])) {
             regex.lastIndex = 0;
-            // Show path relative to workspace root for readability
             const relPath = path.relative(rootPath, filePath);
             results.push(`${relPath}:${i + 1}: ${lines[i].trim().substring(0, 120)}`);
             count++;

@@ -2,7 +2,7 @@
  * 标准日志分类名称。
  *
  * 使用方式：
- *   import { LOG_CATEGORY } from '@vibeeditor/agent';
+ *   import { LOG_CATEGORY } from '@openwork/agent';
  *   const log = createLogger(LOG_CATEGORY.FILE_OPS);
  *
  * 通过 LOG_CATEGORIES 环境变量过滤（逗号分隔）：
@@ -42,6 +42,9 @@ export const LOG_CATEGORY = {
 
   /** Session：会话生命周期、子 Agent 委托 */
   SESSION: 'Session',
+
+  /** SessionMemory：记忆模块的写入、投影、持久化 */
+  MEMORY: 'Memory',
 
   /** 工作区：打开、关闭、持久化、会话保存 */
   WORKSPACE: 'Workspace',

@@ -57,7 +57,6 @@ function buildRuntimeConfig(provider: ProviderConfig, workDir: string, mcpServer
     provider,
     workspaceRoot: workDir,
     mcpServers,
-    maxTurns: 15,
   };
 }
 
@@ -200,7 +199,8 @@ async function runAgentLoop(provider: ProviderConfig, mcpManager: McpManager | n
       });
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      console.log(`\n\n[${elapsed}s]${result.edits.length ? ` | ${result.edits.length} edit(s)` : ''}`);
+      // 编辑已下沉为 agent 内建工具(FileWriteTool/FileEditTool),done 后无需再统计 edits。
+      console.log(`\n\n[${elapsed}s] | ${result.toolCalls.length} tool call(s)`);
     } catch (e: any) {
       console.log(`\n❌ Error: ${e.message}`);
     }
@@ -305,7 +305,7 @@ async function runMcpManualLoop(manager: McpManager, tools: McpToolInfo[]): Prom
 
 function printBanner(): void {
   console.log('╔══════════════════════════════════════════╗');
-  console.log('║     Agent CLI — VibeEditor              ║');
+  console.log('║     Agent CLI — OpenWork              ║');
   console.log('╚══════════════════════════════════════════╝');
 }
 

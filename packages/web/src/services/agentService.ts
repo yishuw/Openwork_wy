@@ -1,5 +1,6 @@
 import { i18n } from '../locales';
 import { webAgentLog } from './logger';
+import type { IDESnapshot } from '@openwork/agent';
 
 declare const __SERVER_PORT__: number;
 
@@ -17,6 +18,7 @@ export interface AgentConfig {
   systemPrompt?: string;
   temperature?: number;
   maxTokens?: number;
+  memoryTokenBudget?: number;
 }
 
 /** 对话消息 */
@@ -24,26 +26,54 @@ export interface AgentMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
-  edits?: { path: string; content: string }[];
+  thinking?: string;
   timestamp: number;
 }
 
 /** SSE 流式事件类型 */
 export interface StreamEvent {
   type: 'tool_start' | 'tool_end' | 'tool_result' | 'thinking_start' | 'thinking_end';
-  message?: string;
+  /** tool_result 的内容文本 */
   content?: string;
+  /** 工具类型(tool_start/tool_end) */
+  toolType?: string;
+  /** 工具标签(tool_start) */
+  toolLabel?: string;
+  /** 工具参数(tool_start) */
+  toolParams?: Record<string, string>;
+  /** 工具执行耗时毫秒(tool_end) */
+  durationMs?: number;
+}
+
+/** 流式请求 body —— 与 server 端 StreamRequestBody 对齐 */
+export interface StreamRequestBody {
+  message: string;
+  ideSnapshot?: IDESnapshot;
+  workspaceRoot?: string;
+  workspaceId?: string;
+  sessionId?: string;
+  config?: AgentConfig;
 }
 
 export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
   return {
-    async sendMessage(message: string, context: Record<string, unknown>, config: AgentConfig): Promise<AgentMessage> {
-      const body: Record<string, unknown> = { message, context, config };
-      if (context.sessionId) body.sessionId = context.sessionId;
+    async sendMessage(
+      message: string,
+      body: Partial<StreamRequestBody>,
+      config: AgentConfig,
+    ): Promise<AgentMessage> {
+      const fullBody: StreamRequestBody = {
+        message,
+        ideSnapshot: body.ideSnapshot,
+        workspaceRoot: body.workspaceRoot,
+        workspaceId: body.workspaceId,
+        sessionId: body.sessionId,
+        config,
+      };
       const res = await fetch(`${baseUrl}/api/agent/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(fullBody),
       });
       if (!res.ok) throw new Error(`${i18n.global.t('errors.apiError')}: ${res.status}`);
       return res.json();
@@ -51,26 +81,24 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
 
     async streamMessage(
       message: string,
-      context: Record<string, unknown>,
+      body: Partial<StreamRequestBody>,
       config: AgentConfig,
       onChunk: (type: 'thinking' | 'content', text: string) => void,
       onEvent?: (event: StreamEvent) => void,
-      options?: { signal?: AbortSignal }
+      options?: { signal?: AbortSignal },
     ): Promise<AgentMessage> {
-      const body: Record<string, unknown> = { message, context, config };
-      if (context.workspaceRoot) {
-        body.workspaceRoot = context.workspaceRoot;
-      }
-      if (context.workspaceId) {
-        body.workspaceId = context.workspaceId;
-      }
-      if (context.sessionId) {
-        body.sessionId = context.sessionId;
-      }
+      const fullBody: StreamRequestBody = {
+        message,
+        ideSnapshot: body.ideSnapshot,
+        workspaceRoot: body.workspaceRoot,
+        workspaceId: body.workspaceId,
+        sessionId: body.sessionId,
+        config,
+      };
       const res = await fetch(`${baseUrl}/api/agent/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(fullBody),
         signal: options?.signal,
       });
 
@@ -86,9 +114,9 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
 
       const decoder = new TextDecoder();
       let fullContent = '';
+      let fullThinking = '';
       let buffer = '';
       let thinkingActive = false;
-      let edits: { path: string; content: string }[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -105,17 +133,35 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
             const data = JSON.parse(line.slice(6));
             if (data.error) throw new Error(data.error);
             if (data.done) {
-              if (data.edits) edits = data.edits;
               streamDone = true;
               break;
             }
 
             if (data.tool_start && onEvent) {
-              onEvent({ type: 'tool_start', message: data.tool_start });
+              const ts = typeof data.tool_start === 'string'
+                ? { toolType: 'tool', toolLabel: data.tool_start, toolParams: {} }
+                : data.tool_start;
+              onEvent({
+                type: 'tool_start',
+                toolType: ts.toolType || 'tool',
+                toolLabel: ts.toolLabel || '',
+                toolParams: ts.toolParams || {},
+              });
             } else if (data.tool_end && onEvent) {
-              onEvent({ type: 'tool_end', message: data.tool_end });
+              const te = typeof data.tool_end === 'string'
+                ? { toolType: data.tool_end, durationMs: 0 }
+                : data.tool_end;
+              onEvent({
+                type: 'tool_end',
+                toolType: te.toolType,
+                durationMs: te.durationMs || 0,
+              });
             } else if (data.tool_result && onEvent) {
-              onEvent({ type: 'tool_result', content: data.tool_result });
+              const tr = data.tool_result;
+              onEvent({
+                type: 'tool_result',
+                content: typeof tr === 'string' ? tr : (tr?.content || ''),
+              });
             }
 
             if (data.thinking) {
@@ -123,6 +169,7 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
                 thinkingActive = true;
                 if (onEvent) onEvent({ type: 'thinking_start' });
               }
+              fullThinking += data.thinking;
               onChunk('thinking', data.thinking);
             }
 
@@ -149,7 +196,7 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
         id: `agent_${Date.now()}`,
         role: 'assistant',
         content: fullContent,
-        edits,
+        thinking: fullThinking,
         timestamp: Date.now(),
       };
     },
