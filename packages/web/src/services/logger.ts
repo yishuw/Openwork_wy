@@ -1,12 +1,12 @@
 /**
  * 浏览器端轻量日志包装器。
  *
- * 与 @vibeeditor/agent 的 Logger 接口兼容。
+ * 与 @openwork/agent 的 Logger 接口兼容。
  * 通过 localStorage 或 URL 参数控制日志级别。
  *
  * 控制方式（优先级从高到低）：
  * 1. URL 参数 `?log=debug|info|warn|error`
- * 2. localStorage `vibe_log_level`
+ * 2. localStorage `openwork_log_level`
  * 3. 默认 `warn`（仅 warn 和 error 可见）
  */
 

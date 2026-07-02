@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { LLMGateway, type LLMProvider, createLogger, LOG_CATEGORY } from '@vibeeditor/agent';
+import { LLMGateway, type LLMProvider, createLogger, LOG_CATEGORY } from '@openwork/agent';
 
 const log = createLogger(LOG_CATEGORY.GATEWAY);
 

@@ -9,7 +9,7 @@
 
 <script setup lang="ts">
 import { NTag } from 'naive-ui';
-import type { DisplayBlock } from '@vibeeditor/agent';
+import type { DisplayBlock } from '@openwork/agent';
 
 defineProps<{
   block: DisplayBlock & { type: 'tool_call' };

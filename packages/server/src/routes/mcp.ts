@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import * as path from 'path';
-import { McpManager, type McpServerConfig, type McpConfig, type McpServerEntry, type McpSettingsFile } from '@vibeeditor/agent';
+import { McpManager, type McpServerConfig, type McpConfig, type McpServerEntry, type McpSettingsFile } from '@openwork/agent';
 
 function settingsPath(configDir: string): string {
   return path.join(configDir, 'mcp-settings.json');

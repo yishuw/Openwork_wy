@@ -28,7 +28,7 @@ const annotations: ToolAnnotations = {
   openWorldHint: false,
 };
 
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.vibeeditor']);
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.openwork']);
 
 export class SearchCodeTool implements ITool {
   readonly name = SEARCH_CODE_TOOL_NAME;

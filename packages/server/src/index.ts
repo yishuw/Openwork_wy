@@ -8,7 +8,7 @@ import { createConfigRouter } from './routes/config';
 import { createWorkspaceRouter } from './routes/workspace';
 import { createLLMRouter } from './routes/llm';
 import { WorkspaceManager } from './workspace/manager';
-import { LLMGateway, createLogger, LOG_CATEGORY } from '@vibeeditor/agent';
+import { LLMGateway, createLogger, LOG_CATEGORY } from '@openwork/agent';
 import { requestLoggerMiddleware } from './middleware/requestLogger';
 
 const log = createLogger(LOG_CATEGORY.HTTP);
@@ -68,7 +68,7 @@ export function startServer(config: ServerConfig = {}) {
   });
 
   server.listen(port, host, () => {
-    log.info(`VibeEditor server running at http://${host}:${port}`, { port, host, configDir: config.configDir });
+    log.info(`OpenWork server running at http://${host}:${port}`, { port, host, configDir: config.configDir });
   });
 
   return server;

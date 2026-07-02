@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { createLogger, runWithContext, LOG_CATEGORY } from '@vibeeditor/agent';
+import { createLogger, runWithContext, LOG_CATEGORY } from '@openwork/agent';
 
 const log = createLogger(LOG_CATEGORY.HTTP);
 

@@ -87,7 +87,7 @@
 import { ref, reactive, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { renderMarkdown } from '../../services/markdown';
-import type { DisplayMessage } from '@vibeeditor/agent';
+import type { DisplayMessage } from '@openwork/agent';
 
 defineProps<{
   messages: DisplayMessage[];

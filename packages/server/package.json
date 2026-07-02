@@ -1,8 +1,8 @@
 {
-  "name": "@vibeeditor/server",
+  "name": "@openwork/server",
   "version": "0.1.0",
   "private": true,
-  "description": "VibeEditor server backend - file operations and agent API",
+  "description": "OpenWork server backend - file operations and agent API",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
@@ -11,7 +11,7 @@
     "start": "node dist/run.js"
   },
   "dependencies": {
-    "@vibeeditor/agent": "0.1.0",
+    "@openwork/agent": "0.1.0",
     "express": "^4.18.2",
     "cors": "^2.8.5"
   },

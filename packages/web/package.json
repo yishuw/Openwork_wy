@@ -1,8 +1,8 @@
 {
-  "name": "@vibeeditor/web",
+  "name": "@openwork/web",
   "version": "0.1.0",
   "private": true,
-  "description": "VibeEditor web frontend - Vue 3 + Monaco Editor",
+  "description": "OpenWork web frontend - Vue 3 + Monaco Editor",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@imengyu/vue3-context-menu": "^1.5.4",
-    "@vibeeditor/agent": "0.1.0",
+    "@openwork/agent": "0.1.0",
     "@vue-office/excel": "^1.7.14",
     "@vue-office/pptx": "^1.0.1",
     "docx-preview": "^0.3.7",

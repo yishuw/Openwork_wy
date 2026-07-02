@@ -527,7 +527,7 @@ let openFolderResolver: ((value: string | null) => void) | null = null;
 let openFileResolver: ((value: string | null) => void) | null = null;
 
 // ===== 跨标签页工作区去重 (BroadcastChannel) =====
-const bcChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('vibeeditor-workspace-sync') : null;
+const bcChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('openwork-workspace-sync') : null;
 const currentWorkspacePaths = ref<string[]>([]);
 let bcResponseTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -834,7 +834,7 @@ watch(() => store.fileTreeNodes.length, (count) => {
   ];
 });
 
-// 标签页变化时自动持久化到 .vibeeditor/workspace.json
+// 标签页变化时自动持久化到 .openwork/workspace.json
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 watch(
   () => [store.tabs.map(t => ({ path: t.path, isUntitled: t.isUntitled })), store.activeTabId],
@@ -1129,7 +1129,7 @@ onMounted(async () => {
       await fs.openWorkspaceViaPath(decodedPath);
       updateWorkspacePaths();
     } catch (e: any) {
-      console.error('[VibeEditor] Failed to open workspace via URL param:', e);
+      console.error('[OpenWork] Failed to open workspace via URL param:', e);
       fs.error = `Failed to open workspace: ${e instanceof Error ? e.message : String(e)}`;
     }
   }
@@ -1141,7 +1141,7 @@ onMounted(async () => {
       await fs.openFileAsLightweightWorkspace(decodedPath);
       updateWorkspacePaths();
     } catch (e: any) {
-      console.error('[VibeEditor] Failed to open file via URL param:', e);
+      console.error('[OpenWork] Failed to open file via URL param:', e);
       fs.error = `Failed to open file: ${e instanceof Error ? e.message : String(e)}`;
     }
   }

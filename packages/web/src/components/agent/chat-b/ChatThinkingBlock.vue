@@ -11,7 +11,7 @@
 import { computed } from 'vue';
 import { NCollapseItem, NTag } from 'naive-ui';
 import { renderMarkdown } from '../../../services/markdown';
-import type { DisplayBlock } from '@vibeeditor/agent';
+import type { DisplayBlock } from '@openwork/agent';
 
 const props = defineProps<{
   block: DisplayBlock & { type: 'thinking' };

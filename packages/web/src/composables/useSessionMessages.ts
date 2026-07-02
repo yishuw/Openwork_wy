@@ -1,6 +1,6 @@
 import { ref, watch, type Ref } from 'vue';
 import { createFileServiceClient } from '../services/fileService';
-import type { DisplayMessage } from '@vibeeditor/agent';
+import type { DisplayMessage } from '@openwork/agent';
 import { webAgentLog } from '../services/logger';
 
 /**

@@ -39,7 +39,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { NCollapse, NAlert } from 'naive-ui';
-import type { DisplayMessage, DisplayBlock } from '@vibeeditor/agent';
+import type { DisplayMessage, DisplayBlock } from '@openwork/agent';
 import ChatThinkingBlock from './ChatThinkingBlock.vue';
 import ChatToolBlock from './ChatToolBlock.vue';
 import ChatResponseBlock from './ChatResponseBlock.vue';

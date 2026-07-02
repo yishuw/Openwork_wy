@@ -61,7 +61,7 @@ export class McpManager {
   /** 根据配置连接所有 MCP 服务器，个别失败不影响其他 */
   async connectAll(
     config: McpConfig,
-    clientName = 'VibeEditor',
+    clientName = 'OpenWork',
     clientVersion = '0.1.0'
   ): Promise<void> {
     const entries = Object.entries(config.mcpServers);

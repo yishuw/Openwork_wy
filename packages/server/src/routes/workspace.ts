@@ -4,8 +4,8 @@ import * as path from 'path';
 import * as os from 'os';
 import type { FileEntry } from '../fs/types';
 import { WorkspaceManager } from '../workspace/manager';
-import type { LLMGateway } from '@vibeeditor/agent';
-import { createLogger, LOG_CATEGORY } from '@vibeeditor/agent';
+import type { LLMGateway } from '@openwork/agent';
+import { createLogger, LOG_CATEGORY } from '@openwork/agent';
 
 const log = createLogger(LOG_CATEGORY.WORKSPACE);
 

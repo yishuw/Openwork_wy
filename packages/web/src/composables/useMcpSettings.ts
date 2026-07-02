@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import type { McpServerConfig, McpServerEntry, McpToolInfo } from '@vibeeditor/agent';
+import type { McpServerConfig, McpServerEntry, McpToolInfo } from '@openwork/agent';
 import type { McpServerUI } from '../types/mcp-ui';
 import { getMcpService } from '../services/mcpService';
 

@@ -80,7 +80,7 @@ import { useLLMSettings } from '../../composables/useLLMSettings';
 import { useEditorStore } from '../../stores/editor';
 import { useAgent } from '../../composables/useAgent';
 import { useSessionMessages } from '../../composables/useSessionMessages';
-import type { DisplayMessage } from '@vibeeditor/agent';
+import type { DisplayMessage } from '@openwork/agent';
 import ChatSessionTabs from './chat-b/ChatSessionTabs.vue';
 import ChatEmptyState from './chat-b/ChatEmptyState.vue';
 import ChatMessageItem from './chat-b/ChatMessageItem.vue';

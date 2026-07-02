@@ -2,7 +2,7 @@
  * 标准日志分类名称。
  *
  * 使用方式：
- *   import { LOG_CATEGORY } from '@vibeeditor/agent';
+ *   import { LOG_CATEGORY } from '@openwork/agent';
  *   const log = createLogger(LOG_CATEGORY.FILE_OPS);
  *
  * 通过 LOG_CATEGORIES 环境变量过滤（逗号分隔）：

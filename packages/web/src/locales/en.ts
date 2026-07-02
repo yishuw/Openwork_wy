@@ -39,7 +39,7 @@ export default {
     replace: 'Replace',
     replaceShort: 'Ctrl+H',
     help: 'Help',
-    appName: 'VibeEditor',
+    appName: 'OpenWork',
   },
   rightToolbar: {
     agent: 'AI Agent',
@@ -71,7 +71,7 @@ export default {
     mcpServer: 'MCP Servers',
   },
   placeholder: {
-    title: 'VibeEditor',
+    title: 'OpenWork',
     hint: 'Open a folder or file to get started',
     openFolder: 'Open Folder',
     openFile: 'Open File',
@@ -107,7 +107,7 @@ export default {
   },
   dragOverlay: {
     title: 'Drop folder to open',
-    subtitle: 'Release anywhere in VibeEditor',
+    subtitle: 'Release anywhere in OpenWork',
   },
   undoNotification: {
     deleted: 'Deleted',

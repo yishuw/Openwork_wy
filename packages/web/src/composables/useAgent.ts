@@ -2,7 +2,7 @@ import { ref } from 'vue';
 import { createAgentService } from '../services/agentService';
 import type { AgentConfig, StreamEvent } from '../services/agentService';
 import type { ProviderConfig } from './useLLMSettings';
-import type { IDESnapshot, DisplayMessage } from '@vibeeditor/agent';
+import type { IDESnapshot, DisplayMessage } from '@openwork/agent';
 import { useEditorStore } from '../stores/editor';
 import { getEditorInstance } from '../services/editorInstance';
 import { webAgentLog } from '../services/logger';

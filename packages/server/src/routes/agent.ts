@@ -5,11 +5,11 @@ import {
   type AgentRuntimeEvent,
   type AgentContext,
   type IDESnapshot,
-} from '@vibeeditor/agent';
-import { createLogger } from '@vibeeditor/agent';
+} from '@openwork/agent';
+import { createLogger } from '@openwork/agent';
 import { loadEnabledMcpServers } from './mcp';
 import type { WorkspaceManager } from '../workspace/manager';
-import type { LLMGateway } from '@vibeeditor/agent';
+import type { LLMGateway } from '@openwork/agent';
 
 const log = createLogger('AgentRouter');
 

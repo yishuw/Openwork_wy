@@ -1,8 +1,8 @@
-# @vibeeditor/web
+# @openwork/web
 
 > [中文](README.md)
 
-VibeEditor frontend — an AI-assisted code editor built on Vue 3 + Vite + Monaco Editor + Pinia, using the naive-ui component library and vue-i18n for internationalization.
+OpenWork frontend — an AI-assisted code editor built on Vue 3 + Vite + Monaco Editor + Pinia, using the naive-ui component library and vue-i18n for internationalization.
 
 ## Tech stack
 
@@ -18,7 +18,7 @@ VibeEditor frontend — an AI-assisted code editor built on Vue 3 + Vite + Monac
 | `@vue-office/*` / docx-preview | Excel / PPTX / Word document preview |
 | `@imengyu/vue3-context-menu` | File-tree context menu |
 
-> The only workspace dependency is **`@vibeeditor/agent`** (for types and helpers like `parseEditsFromText`). The frontend does not run the agent loop itself — it calls the server over SSE.
+> The only workspace dependency is **`@openwork/agent`** (for types and helpers like `parseEditsFromText`). The frontend does not run the agent loop itself — it calls the server over SSE.
 
 ## Directory layout
 
@@ -58,7 +58,7 @@ src/
 │   ├── configService.ts           # Config CRUD (Electron IPC / REST / localStorage)
 │   ├── llmService.ts              # LLM provider REST client (/api/llm/*)
 │   ├── mcpService.ts              # MCP server REST client (/api/mcp/*)
-│   ├── editParser.ts              # Re-exports parseEditsFromText from @vibeeditor/agent
+│   ├── editParser.ts              # Re-exports parseEditsFromText from @openwork/agent
 │   ├── editorInstance.ts          # Monaco editor singleton holder
 │   ├── markdown.ts                # Markdown rendering (markdown-it + KaTeX)
 │   └── logger.ts                  # Frontend structured logging

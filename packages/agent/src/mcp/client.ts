@@ -32,7 +32,7 @@ export class MCPClient {
 
   constructor(
     transport: Transport,
-    clientInfo: MCPClientInfo = { name: 'VibeEditor', version: '0.1.0' }
+    clientInfo: MCPClientInfo = { name: 'OpenWork', version: '0.1.0' }
   ) {
     this.transport = transport;
     this.clientInfo = clientInfo;

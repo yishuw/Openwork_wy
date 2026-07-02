@@ -1,6 +1,6 @@
 import { i18n } from '../locales';
 import { webAgentLog } from './logger';
-import type { IDESnapshot } from '@vibeeditor/agent';
+import type { IDESnapshot } from '@openwork/agent';
 
 declare const __SERVER_PORT__: number;
 

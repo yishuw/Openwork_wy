@@ -1,10 +1,10 @@
-# VibeEditor
+# OpenWork
 
 > [中文](README.md)
 
 AI-powered code editor built with **Monaco Editor** + **Vue 3**, supporting both **server deployment** and **Electron desktop**.
 
-![VibeEditor Screenshot](images/app_ui.png)
+![OpenWork Screenshot](images/app_ui.png)
 
 ## Quick Start · Build & Deploy
 
@@ -23,7 +23,7 @@ There are only **two** dev modes:
 | **Server (separated frontend/backend)** | `npm run dev:all` | Starts the Express backend (`http://localhost:20385`) and the Vite frontend (`http://localhost:5173`) together; they talk over the `/api` proxy. Suited to browser / remote deployment |
 | **Electron desktop** | `npm run dev:electron` | Starts the Vite frontend + an Electron window; local files are read/written via main-process IPC (`main.ts` entry) |
 
-> Both commands auto-build `@vibeeditor/agent` first.
+> Both commands auto-build `@openwork/agent` first.
 
 To **test the agent module on its own** (without launching the editor UI), use the interactive CLI:
 
@@ -80,9 +80,9 @@ npm run build:electron  # Electron main process
 |---|---------|--------|-------|
 | 8 | Agent chat panel | ✅ | `AgentPanel.vue`, supports chat/edit/agent modes, Markdown + KaTeX rendering, multi-provider config management |
 | 9 | Agent streaming response (SSE) | ✅ | Server SSE + frontend stream parsing fully working with real LLM backend |
-| 10 | Agent generates edits and applies to files | ⚠️ | `<edit>` tag parsing → file writing pipeline works end-to-end; `/api/agent/apply-edits` endpoint exists on server but `executor.ts` from `@vibeeditor/agent` not wired to frontend; edit/agent mode system prompt hardcoded to `chat` in `@vibeeditor/agent` (bug) |
-| 11 | Agent context builder (open files + cursor + selection) | ✅ | `@vibeeditor/agent` — context is assembled inline within the Agent's message construction; frontend `useAgent.ts` does not populate `openFiles`/`fileTree` context in requests |
-| 12 | Edit undo / redo | ⚠️ | `@vibeeditor/agent` — `revertEdits()` implemented; not wired to frontend UI |
+| 10 | Agent generates edits and applies to files | ⚠️ | `<edit>` tag parsing → file writing pipeline works end-to-end; `/api/agent/apply-edits` endpoint exists on server but `executor.ts` from `@openwork/agent` not wired to frontend; edit/agent mode system prompt hardcoded to `chat` in `@openwork/agent` (bug) |
+| 11 | Agent context builder (open files + cursor + selection) | ✅ | `@openwork/agent` — context is assembled inline within the Agent's message construction; frontend `useAgent.ts` does not populate `openFiles`/`fileTree` context in requests |
+| 12 | Edit undo / redo | ⚠️ | `@openwork/agent` — `revertEdits()` implemented; not wired to frontend UI |
 | 13 | LLM backend integration (OpenAI / Anthropic / etc.) | ⚠️ | OpenAI-compatible API via raw fetch (works with Ollama, vLLM, etc.); no SDK dependencies; edit/agent mode system prompt bug (#10) needs fix |
 
 ### P2 — File System & Project Management
@@ -159,10 +159,10 @@ npm run build:electron  # Electron main process
 
 ```mermaid
 graph TD
-    agent["@vibeeditor/agent<br/>AI Agent Framework<br/><br/>· AgentRuntime (unified entry)<br/>· Agent / Session / ToolRegistry<br/>· LLMGateway / MCP Client (STDIO/HTTP/SSE)<br/>· executeEdits / parseEditsFromText"]
-    server["@vibeeditor/server<br/>Express Backend<br/><br/>· /api/files·agent·workspace·llm·mcp<br/>· LocalFileSystem (built-in fs/)<br/>· WorkspaceManager / path traversal protection"]
-    web["@vibeeditor/web<br/>Vue 3 Frontend<br/><br/>· Monaco wrapper + multi-format viewers<br/>· AgentPanel chat UI<br/>· useAgent / useFileSystem<br/>· agentService SSE client"]
-    electron["vibeeditor-desktop<br/>Electron Desktop Shell<br/><br/>· IPC bridge (preload.ts)<br/>· Native file dialogs / menus<br/>· main.ts / main-server.ts dual entry"]
+    agent["@openwork/agent<br/>AI Agent Framework<br/><br/>· AgentRuntime (unified entry)<br/>· Agent / Session / ToolRegistry<br/>· LLMGateway / MCP Client (STDIO/HTTP/SSE)<br/>· executeEdits / parseEditsFromText"]
+    server["@openwork/server<br/>Express Backend<br/><br/>· /api/files·agent·workspace·llm·mcp<br/>· LocalFileSystem (built-in fs/)<br/>· WorkspaceManager / path traversal protection"]
+    web["@openwork/web<br/>Vue 3 Frontend<br/><br/>· Monaco wrapper + multi-format viewers<br/>· AgentPanel chat UI<br/>· useAgent / useFileSystem<br/>· agentService SSE client"]
+    electron["openwork-desktop<br/>Electron Desktop Shell<br/><br/>· IPC bridge (preload.ts)<br/>· Native file dialogs / menus<br/>· main.ts / main-server.ts dual entry"]
 
     agent --> server
     agent --> web
@@ -170,23 +170,23 @@ graph TD
     server --> electron
 ```
 
-> The repo currently has **4 workspace packages** (`agent` / `server` / `web` / `electron`); there is no `@vibeeditor/core`.
+> The repo currently has **4 workspace packages** (`agent` / `server` / `web` / `electron`); there is no `@openwork/core`.
 
 **Architecture highlights**:
-- **`@vibeeditor/agent`** is the core module, exposing `AgentRuntime` as its unified entry; it depends on no workspace package and is decoupled from the platform via `IAgentFileSystem`
-- **File-system implementations live with their consumers**: `LocalFileSystem`/`FileEntry` live in `@vibeeditor/server`'s `fs/`; the browser FSA client and REST client live in `@vibeeditor/web`'s `fileService.ts`; the editor tab type (`EditorTab`) lives in `@vibeeditor/web`'s Pinia store
-- **`@vibeeditor/server`** depends on `@vibeeditor/agent` and provides the full file / agent / workspace / LLM / MCP REST·SSE API
-- **`vibeeditor-desktop`** (Electron) can embed `@vibeeditor/server` (`main-server.ts`) or use IPC-only file operations (`main.ts`)
+- **`@openwork/agent`** is the core module, exposing `AgentRuntime` as its unified entry; it depends on no workspace package and is decoupled from the platform via `IAgentFileSystem`
+- **File-system implementations live with their consumers**: `LocalFileSystem`/`FileEntry` live in `@openwork/server`'s `fs/`; the browser FSA client and REST client live in `@openwork/web`'s `fileService.ts`; the editor tab type (`EditorTab`) lives in `@openwork/web`'s Pinia store
+- **`@openwork/server`** depends on `@openwork/agent` and provides the full file / agent / workspace / LLM / MCP REST·SSE API
+- **`openwork-desktop`** (Electron) can embed `@openwork/server` (`main-server.ts`) or use IPC-only file operations (`main.ts`)
 
 ### 2. Architecture Diagram — Package Dependencies & Deployment Topology
 
 ```mermaid
 graph TB
     subgraph Packages["npm Workspace Packages"]
-        agent["@vibeeditor/agent<br/>AI Agent Framework · AgentRuntime · LLM/MCP · Tool Loop"]
-        server["@vibeeditor/server<br/>Express · REST/SSE · LocalFileSystem · Workspace"]
-        web["@vibeeditor/web<br/>Vue 3 · Vite · Monaco · naive-ui"]
-        electron["vibeeditor-desktop<br/>Electron Shell · IPC Bridge · Embedded Server"]
+        agent["@openwork/agent<br/>AI Agent Framework · AgentRuntime · LLM/MCP · Tool Loop"]
+        server["@openwork/server<br/>Express · REST/SSE · LocalFileSystem · Workspace"]
+        web["@openwork/web<br/>Vue 3 · Vite · Monaco · naive-ui"]
+        electron["openwork-desktop<br/>Electron Shell · IPC Bridge · Embedded Server"]
     end
 
     subgraph Runtime["Runtime Environments"]
@@ -207,7 +207,7 @@ graph TB
     web -->|File System Access API| browser
 ```
 
-**Note**: `@vibeeditor/agent` is a standalone AI Agent framework whose unified entry is `AgentRuntime`, providing LLM provider management, the multi-turn tool loop, the MCP client, and edit execution. `@vibeeditor/server` depends on agent and ships its own `LocalFileSystem` (`fs/`) and workspace management. The `web` frontend proxies `/api` to `server` via Vite in development. In Electron mode, the frontend is loaded by the Electron window, and file operations are bridged to the main process via `preload.ts` IPC, or served by the Express server embedded in `main-server.ts`.
+**Note**: `@openwork/agent` is a standalone AI Agent framework whose unified entry is `AgentRuntime`, providing LLM provider management, the multi-turn tool loop, the MCP client, and edit execution. `@openwork/server` depends on agent and ships its own `LocalFileSystem` (`fs/`) and workspace management. The `web` frontend proxies `/api` to `server` via Vite in development. In Electron mode, the frontend is loaded by the Electron window, and file operations are bridged to the main process via `preload.ts` IPC, or served by the Express server embedded in `main-server.ts`.
 
 ### 3. Flowcharts
 
@@ -243,7 +243,7 @@ flowchart TD
     EX --> RF["Refresh editor tabs + file tree"]
 ```
 
-**Note**: All agent logic runs inside `AgentRuntime` in `@vibeeditor/agent` (the instance lives on the server). `plan` mode streams the LLM directly; `build` mode runs the multi-turn tool loop. The final `done` event carries the `<edit>` blocks parsed from the reply; edits are written via `executeEdits()`.
+**Note**: All agent logic runs inside `AgentRuntime` in `@openwork/agent` (the instance lives on the server). `plan` mode streams the LLM directly; `build` mode runs the multi-turn tool loop. The final `done` event carries the `<edit>` blocks parsed from the reply; edits are written via `executeEdits()`.
 
 ### 4. Sequence Diagram — Workspace Open & Agent Session Persistence
 
@@ -253,7 +253,7 @@ sequenceDiagram
     participant Web as Web (fileService)
     participant Server as Server (/api/workspace)
     participant WM as WorkspaceManager
-    participant Disk as .vibeeditor/workspace.json
+    participant Disk as .openwork/workspace.json
 
     User->>Web: Open folder
     Web->>Server: POST /api/workspace/open { rootPath }
@@ -275,7 +275,7 @@ sequenceDiagram
     Server->>WM: Persist data, release Runtime / MCP connections
 ```
 
-**Note**: The server reuses an `AgentRuntime` (including its MCP connections) by `workspaceId`. Agent conversation history is persisted alongside workspace data in `.vibeeditor/workspace.json` under the workspace directory, so reopening restores tabs and sessions.
+**Note**: The server reuses an `AgentRuntime` (including its MCP connections) by `workspaceId`. Agent conversation history is persisted alongside workspace data in `.openwork/workspace.json` under the workspace directory, so reopening restores tabs and sessions.
 
 ### 5. Core Types Overview
 
@@ -283,11 +283,11 @@ sequenceDiagram
 
 | Interface / Class | Package | Description |
 |----------|--------|------|
-| `IAgentFileSystem` | `@vibeeditor/agent` | Minimal file system interface (readFile / writeFile / exists / readDir) |
-| `IFileSystem` / `LocalFileSystem` | `@vibeeditor/server` | Server file-system interface and Node.js `fs/promises` implementation (`fs/`) |
-| `FileServiceClient` | `@vibeeditor/web` | Unified frontend file client (Electron IPC / Server REST / Browser FSA implementations) |
+| `IAgentFileSystem` | `@openwork/agent` | Minimal file system interface (readFile / writeFile / exists / readDir) |
+| `IFileSystem` / `LocalFileSystem` | `@openwork/server` | Server file-system interface and Node.js `fs/promises` implementation (`fs/`) |
+| `FileServiceClient` | `@openwork/web` | Unified frontend file client (Electron IPC / Server REST / Browser FSA implementations) |
 
-**Agent / AI Layer (all in `@vibeeditor/agent`):**
+**Agent / AI Layer (all in `@openwork/agent`):**
 
 | Interface / Class | Description |
 |----------|------|
@@ -302,10 +302,10 @@ sequenceDiagram
 
 | Interface / Class | Package | Description |
 |----------|--------|------|
-| `AgentContext` | `@vibeeditor/agent` | Agent context (openFiles / fileTree / cursorPosition, etc.) |
-| `ParsedEdit` / `AgentEditResult` | `@vibeeditor/agent` | Parsed edit block / edit result to apply |
-| `EditorTab` / `ViewMode` | `@vibeeditor/web` | Tab (with `viewMode` renderer selection, defined in `stores/editor.ts`) |
-| `EditorStore` | `@vibeeditor/web` | Pinia store — single source of truth (tabs / fileTree / workspace) |
+| `AgentContext` | `@openwork/agent` | Agent context (openFiles / fileTree / cursorPosition, etc.) |
+| `ParsedEdit` / `AgentEditResult` | `@openwork/agent` | Parsed edit block / edit result to apply |
+| `EditorTab` / `ViewMode` | `@openwork/web` | Tab (with `viewMode` renderer selection, defined in `stores/editor.ts`) |
+| `EditorStore` | `@openwork/web` | Pinia store — single source of truth (tabs / fileTree / workspace) |
 
 ## Server API
 
@@ -337,7 +337,7 @@ sequenceDiagram
 
 ## MCP (Model Context Protocol) Support
 
-VibeEditor includes a full MCP client for integrating external tools via the standard protocol.
+OpenWork includes a full MCP client for integrating external tools via the standard protocol.
 
 **Transport Modes:**
 
@@ -392,12 +392,12 @@ The repo is an npm workspace with **4 packages** (each has its own README; the t
 
 | Package | Role | Key contents | Detailed docs |
 |---------|------|--------------|---------------|
-| `@vibeeditor/agent` | AI Agent framework | `AgentRuntime` (unified entry), `Agent`/`Session`, 5 default tools, `McpManager`, `LLMGateway`, `executeEdits`/`parseEditsFromText`, structured logging, CLI | [packages/agent/README.md](packages/agent/README.md) |
-| `@vibeeditor/server` | Express backend | `createApp`/`startServer`, `fs/` (`LocalFileSystem`), `routes/` (files·agent·workspace·llm·mcp·config), `WorkspaceManager`, request-logging middleware | [packages/server/README.md](packages/server/README.md) |
-| `@vibeeditor/web` | Vue 3 frontend | `MonacoEditor` + multi-format viewers, `AgentPanel`, file tree, MCP/settings panels, `composables/`, `services/` (`fileService`, etc.), `stores/` (editor/sessions/settings), i18n | [packages/web/README.md](packages/web/README.md) |
-| `vibeeditor-desktop` | Electron desktop shell | `main.ts`/`main-server.ts` dual entry, `preload.ts` (`window.electronAPI`), `ipc/file-handler.ts`, native menus, `vibe://` protocol | [packages/electron/README.md](packages/electron/README.md) |
+| `@openwork/agent` | AI Agent framework | `AgentRuntime` (unified entry), `Agent`/`Session`, 5 default tools, `McpManager`, `LLMGateway`, `executeEdits`/`parseEditsFromText`, structured logging, CLI | [packages/agent/README.md](packages/agent/README.md) |
+| `@openwork/server` | Express backend | `createApp`/`startServer`, `fs/` (`LocalFileSystem`), `routes/` (files·agent·workspace·llm·mcp·config), `WorkspaceManager`, request-logging middleware | [packages/server/README.md](packages/server/README.md) |
+| `@openwork/web` | Vue 3 frontend | `MonacoEditor` + multi-format viewers, `AgentPanel`, file tree, MCP/settings panels, `composables/`, `services/` (`fileService`, etc.), `stores/` (editor/sessions/settings), i18n | [packages/web/README.md](packages/web/README.md) |
+| `openwork-desktop` | Electron desktop shell | `main.ts`/`main-server.ts` dual entry, `preload.ts` (`window.electronAPI`), `ipc/file-handler.ts`, native menus, `vibe://` protocol | [packages/electron/README.md](packages/electron/README.md) |
 
-> Note: the `@vibeeditor/core` package referenced in earlier docs no longer exists — its file-system implementations (`LocalFileSystem`/`FileEntry`) were folded into `@vibeeditor/server`'s `fs/`, and the editor tab type into `@vibeeditor/web`'s Pinia store.
+> Note: the `@openwork/core` package referenced in earlier docs no longer exists — its file-system implementations (`LocalFileSystem`/`FileEntry`) were folded into `@openwork/server`'s `fs/`, and the editor tab type into `@openwork/web`'s Pinia store.
 
 ---
 

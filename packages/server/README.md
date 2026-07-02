@@ -1,6 +1,6 @@
-# @vibeeditor/server
+# @openwork/server
 
-VibeEditor 服务端 —— 基于 Express 的文件操作 API 与 AI Agent 端点。
+OpenWork 服务端 —— 基于 Express 的文件操作 API 与 AI Agent 端点。
 
 ---
 
@@ -516,7 +516,7 @@ interface AgentEditResult {
 
 ### 3. Agent `/api/agent`
 
-所有 Agent 逻辑委托给 `@vibeeditor/agent`，服务端负责路由分派和 Runtime 生命周期管理。
+所有 Agent 逻辑委托给 `@openwork/agent`，服务端负责路由分派和 Runtime 生命周期管理。
 
 #### `POST /api/agent/chat`
 
@@ -710,7 +710,7 @@ Linux/macOS 下返回 `[{ "name": "/", "path": "/", "isDirectory": true }]`。
 
 #### `POST /api/workspace/open`
 
-打开或创建工作区。创建 `AgentRuntime`，读取/写入 `.vibeeditor/workspace.json`，恢复持久化的 Agent 会话。
+打开或创建工作区。创建 `AgentRuntime`，读取/写入 `.openwork/workspace.json`，恢复持久化的 Agent 会话。
 
 **请求体**
 
@@ -1422,7 +1422,7 @@ while (true) {
 
 | 包 | 用途 |
 |----|------|
-| `@vibeeditor/agent` | AgentRuntime、MCP Manager、LLM Gateway、结构化日志 |
+| `@openwork/agent` | AgentRuntime、MCP Manager、LLM Gateway、结构化日志 |
 | `express` | HTTP 框架 |
 | `cors` | 跨域支持 |
 
@@ -1431,5 +1431,5 @@ while (true) {
 - **`run.ts` 是实际启动入口**，读取根目录 `app-config.json` 获取端口和配置目录；`createApp()` / `startServer()` 也可作为库被其他程序引用。
 - **路径安全**：`/api/files/*` 全部受目录穿越保护；`/api/config/*` 同样受保护；`/api/workspace/browse` 无沙箱限制，后续可通过配置文件限制浏览范围。
 - **Runtime 缓存**：通过 `workspaceId` 参数可在多次请求间复用 `AgentRuntime`（含 MCP 连接），避免重复初始化开销。
-- **Agent 会话持久化**：Agent 对话历史随工作区数据持久化到 `.vibeeditor/workspace.json`，关闭后重新打开可恢复。
+- **Agent 会话持久化**：Agent 对话历史随工作区数据持久化到 `.openwork/workspace.json`，关闭后重新打开可恢复。
 - **MCP 配置热更新**：`/api/agent/stream` 和 `/api/agent/chat` 在 `workspaceId` 存在时会重新从磁盘加载 MCP 配置，新增/启用的服务器自动生效。

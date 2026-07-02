@@ -39,7 +39,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import type { McpServerConfig, McpToolInfo } from '@vibeeditor/agent';
+import type { McpServerConfig, McpToolInfo } from '@openwork/agent';
 import type { McpServerUI } from '../../types/mcp-ui';
 import { useMcpSettings } from '../../composables/useMcpSettings';
 import McpServerItem from './McpServerItem.vue';

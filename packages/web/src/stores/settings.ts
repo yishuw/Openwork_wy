@@ -6,10 +6,10 @@ import { configService } from '../services/configService'
 export type Language = 'zh' | 'en'
 export type Theme = 'dark' | 'light' | 'blue'
 
-const STORAGE_KEY_LANG = 'vibeeditor-language'
-const STORAGE_KEY_THEME = 'vibeeditor-theme'
+const STORAGE_KEY_LANG = 'openwork-language'
+const STORAGE_KEY_THEME = 'openwork-theme'
 const CONFIG_FILENAME = 'settings.json'
-const CONFIG_STORAGE_KEY = 'vibeeditor-settings'
+const CONFIG_STORAGE_KEY = 'openwork-settings'
 
 function loadTheme(): Theme {
   try {

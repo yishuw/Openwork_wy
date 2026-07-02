@@ -43,8 +43,8 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
 ];
 
 const CFG_FILE = 'provider-settings.json';
-const STORAGE_KEY = 'vibeeditor-providers';
-const ACTIVE_KEY = 'vibeeditor-active-provider';
+const STORAGE_KEY = 'openwork-providers';
+const ACTIVE_KEY = 'openwork-active-provider';
 
 async function loadProviders(): Promise<ProviderConfig[]> {
   const data = await configService.loadJSON<{ providers?: ProviderConfig[]; activeProviderId?: string }>(CFG_FILE, STORAGE_KEY);

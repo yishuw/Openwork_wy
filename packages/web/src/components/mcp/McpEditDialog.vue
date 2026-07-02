@@ -70,7 +70,7 @@
 import { ref, reactive, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NModal, NButton, NForm, NFormItem, NInput, NSelect } from 'naive-ui'
-import type { McpServerConfig, McpToolInfo } from '@vibeeditor/agent'
+import type { McpServerConfig, McpToolInfo } from '@openwork/agent'
 import type { McpServerUI } from '../../types/mcp-ui'
 import { getMcpService } from '../../services/mcpService'
 

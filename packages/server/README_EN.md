@@ -1,6 +1,6 @@
-# @vibeeditor/server
+# @openwork/server
 
-VibeEditor backend — Express-based file operations API and AI Agent endpoints.
+OpenWork backend — Express-based file operations API and AI Agent endpoints.
 
 ---
 
@@ -516,7 +516,7 @@ Rename or move file/directory (auto-creates target parent directory).
 
 ### 3. Agent `/api/agent`
 
-All agent logic is delegated to `@vibeeditor/agent`. The server handles routing and Runtime lifecycle management.
+All agent logic is delegated to `@openwork/agent`. The server handles routing and Runtime lifecycle management.
 
 #### `POST /api/agent/chat`
 
@@ -710,7 +710,7 @@ Browse file system at an arbitrary path (no sandbox restrictions).
 
 #### `POST /api/workspace/open`
 
-Open or create a workspace. Creates `AgentRuntime`, reads/writes `.vibeeditor/workspace.json`, restores persisted agent sessions.
+Open or create a workspace. Creates `AgentRuntime`, reads/writes `.openwork/workspace.json`, restores persisted agent sessions.
 
 **Request Body**
 
@@ -1422,7 +1422,7 @@ while (true) {
 
 | Package | Purpose |
 |---------|---------|
-| `@vibeeditor/agent` | AgentRuntime, MCP Manager, LLM Gateway, structured logging |
+| `@openwork/agent` | AgentRuntime, MCP Manager, LLM Gateway, structured logging |
 | `express` | HTTP framework |
 | `cors` | Cross-origin support |
 
@@ -1431,5 +1431,5 @@ while (true) {
 - **`run.ts` is the actual entry point**, reading root `app-config.json` for port and config directory; `createApp()` / `startServer()` can also be imported as a library.
 - **Path security**: `/api/files/*` all protected against directory traversal; `/api/config/*` likewise protected; `/api/workspace/browse` has no sandbox — future versions may add configurable restrictions.
 - **Runtime caching**: Using the `workspaceId` parameter reuses `AgentRuntime` (including MCP connections) across multiple requests, avoiding repeated initialization overhead.
-- **Agent session persistence**: Agent conversation history is persisted alongside workspace data in `.vibeeditor/workspace.json` and can be restored on reopen.
+- **Agent session persistence**: Agent conversation history is persisted alongside workspace data in `.openwork/workspace.json` and can be restored on reopen.
 - **MCP config hot reload**: `/api/agent/stream` and `/api/agent/chat` reload MCP config from disk when `workspaceId` is present, so newly added/enabled servers take effect immediately.

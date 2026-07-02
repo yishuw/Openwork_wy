@@ -305,7 +305,7 @@ async function runMcpManualLoop(manager: McpManager, tools: McpToolInfo[]): Prom
 
 function printBanner(): void {
   console.log('╔══════════════════════════════════════════╗');
-  console.log('║     Agent CLI — VibeEditor              ║');
+  console.log('║     Agent CLI — OpenWork              ║');
   console.log('╚══════════════════════════════════════════╝');
 }
 

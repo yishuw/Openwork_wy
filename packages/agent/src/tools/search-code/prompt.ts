@@ -10,6 +10,6 @@ export const SEARCH_CODE_TOOL_PROMPT = `Search code with a regex pattern.
 
 Usage:
 - Recursively searches files under the given path (default: workspace root).
-- Skips common noise directories: node_modules, .git, dist, .vibeeditor.
+- Skips common noise directories: node_modules, .git, dist, .openwork.
 - Results are formatted as \`relative/path:line: matched-line\` (line truncated to 120 chars).
 - Use maxResults to cap the number of matches (default 20).`;

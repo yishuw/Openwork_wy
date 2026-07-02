@@ -58,7 +58,7 @@ import { useLLMSettings } from '../../composables/useLLMSettings';
 import { useEditorStore } from '../../stores/editor';
 import { useAgent } from '../../composables/useAgent';
 import { useSessionMessages } from '../../composables/useSessionMessages';
-import type { DisplayMessage } from '@vibeeditor/agent';
+import type { DisplayMessage } from '@openwork/agent';
 import AgentSessionTabs from './AgentSessionTabs.vue';
 import AgentGuidePages from './AgentGuidePages.vue';
 import AgentMessageList from './AgentMessageList.vue';

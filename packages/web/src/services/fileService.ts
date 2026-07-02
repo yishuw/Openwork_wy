@@ -1,5 +1,5 @@
 import { i18n } from '../locales';
-import type { DisplayMessage } from '@vibeeditor/agent';
+import type { DisplayMessage } from '@openwork/agent';
 
 export interface FileEntry {
   name: string;
@@ -545,8 +545,8 @@ export function createFileServiceClient(): FileServiceClient {
     // (IPC 客户端的 workspace/session 方法都是空实现 —— Electron 主进程不处理这些)
     const ipc = createElectronClient();
     let serverBaseUrl = '';
-    if (typeof window !== 'undefined' && (window as any).__VIBE_SERVER_PORT__) {
-      serverBaseUrl = `http://localhost:${(window as any).__VIBE_SERVER_PORT__}`;
+    if (typeof window !== 'undefined' && (window as any).__OPENWORK_SERVER_PORT__) {
+      serverBaseUrl = `http://localhost:${(window as any).__OPENWORK_SERVER_PORT__}`;
     }
     const http = createServerClient(serverBaseUrl);
     return {

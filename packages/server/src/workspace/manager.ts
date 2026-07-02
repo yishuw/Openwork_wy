@@ -4,14 +4,14 @@ import {
   createLogger,
   LOG_CATEGORY,
   type SerializedSessionMemory,
-} from '@vibeeditor/agent';
+} from '@openwork/agent';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import type { LLMGateway } from '@vibeeditor/agent';
+import type { LLMGateway } from '@openwork/agent';
 
 const log = createLogger(LOG_CATEGORY.WORKSPACE);
 
-const VIBEEDITOR_DIR = '.vibeeditor';
+const OPENWORK_DIR = '.openwork';
 const WORKSPACE_FILE = 'workspace.json';
 
 export interface StoredTab {
@@ -314,9 +314,9 @@ export class WorkspaceManager {
     }
   }
 
-  /** 读取工作区根目录下的 .vibeeditor/workspace.json */
+  /** 读取工作区根目录下的 .openwork/workspace.json */
   private async readWorkspaceFile(rootPath: string): Promise<WorkspaceData | null> {
-    const filePath = path.join(rootPath, VIBEEDITOR_DIR, WORKSPACE_FILE);
+    const filePath = path.join(rootPath, OPENWORK_DIR, WORKSPACE_FILE);
     try {
       const raw = await fs.readFile(filePath, 'utf-8');
       const data = JSON.parse(raw) as WorkspaceData;
@@ -327,9 +327,9 @@ export class WorkspaceManager {
     }
   }
 
-  /** 写入工作区配置到 .vibeeditor/workspace.json */
+  /** 写入工作区配置到 .openwork/workspace.json */
   private async writeWorkspaceFile(rootPath: string, data: WorkspaceData): Promise<void> {
-    const dir = path.join(rootPath, VIBEEDITOR_DIR);
+    const dir = path.join(rootPath, OPENWORK_DIR);
     const filePath = path.join(dir, WORKSPACE_FILE);
     try {
       const content = JSON.stringify(data, null, 2);

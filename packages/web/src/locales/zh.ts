@@ -39,7 +39,7 @@ export default {
     replace: '替换',
     replaceShort: 'Ctrl+H',
     help: '帮助',
-    appName: 'VibeEditor',
+    appName: 'OpenWork',
   },
   rightToolbar: {
     agent: 'AI 助手',
@@ -71,7 +71,7 @@ export default {
     mcpServer: 'MCP 服务器',
   },
   placeholder: {
-    title: 'VibeEditor',
+    title: 'OpenWork',
     hint: '打开文件夹或文件以开始编辑',
     openFolder: '打开文件夹',
     openFile: '打开文件',
@@ -107,7 +107,7 @@ export default {
   },
   dragOverlay: {
     title: '拖放文件夹以打开',
-    subtitle: '在 VibeEditor 任意位置释放',
+    subtitle: '在 OpenWork 任意位置释放',
   },
   undoNotification: {
     deleted: '已删除',
