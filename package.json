@@ -28,6 +28,7 @@
     "dist:electron": "npm run dist:electron:win",
     "lint": "eslint packages/*/src --ext .ts,.tsx,.vue",
     "typecheck": "tsc -b",
+    "test": "npm test -w packages/agent",
     "cli": "npx tsx packages/agent/src/cli.ts",
     "mcp:cli": "npx tsx packages/agent/src/cli.ts"
   },
@@ -39,7 +40,8 @@
     "eslint": "^8.56.0",
     "naive-ui": "^2.44.1",
     "prettier": "^3.2.4",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@vicons/ionicons5": "^0.13.0",
