@@ -6,12 +6,13 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
+    "predev": "npm --prefix ../.. run build:agent",
     "dev": "tsx watch src/run.ts",
     "build": "tsc",
     "start": "node dist/run.js"
   },
   "dependencies": {
-    "@openwork/agent": "0.1.0",
+    "@openwork/agent": "*",
     "express": "^4.18.2",
     "cors": "^2.8.5"
   },

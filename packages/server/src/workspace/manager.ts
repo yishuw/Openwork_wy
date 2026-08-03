@@ -14,6 +14,13 @@ const log = createLogger(LOG_CATEGORY.WORKSPACE);
 const OPENWORK_DIR = '.openwork';
 const WORKSPACE_FILE = 'workspace.json';
 
+/** bash 工具开关:默认启用;OPENWORK_ENABLE_BASH=0/false 时关闭(远程部署建议关闭) */
+function resolveEnableBash(): boolean {
+  const v = process.env.OPENWORK_ENABLE_BASH;
+  if (v === undefined || v === '') return true;
+  return !(v === '0' || v.toLowerCase() === 'false');
+}
+
 export interface StoredTab {
   path: string;
   cursorLine?: number;
@@ -109,6 +116,7 @@ export class WorkspaceManager {
       workspaceRoot: absRoot,
       mcpServers: undefined,
       memoryTokenBudget,
+      enableBash: resolveEnableBash(),
     };
 
     const runtime = new AgentRuntime(config);

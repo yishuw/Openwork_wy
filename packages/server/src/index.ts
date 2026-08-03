@@ -10,6 +10,7 @@ import { createLLMRouter } from './routes/llm';
 import { WorkspaceManager } from './workspace/manager';
 import { LLMGateway, createLogger, LOG_CATEGORY } from '@openwork/agent';
 import { requestLoggerMiddleware } from './middleware/requestLogger';
+import { authMiddleware } from './middleware/auth';
 
 const log = createLogger(LOG_CATEGORY.HTTP);
 
@@ -33,6 +34,7 @@ export function createApp(config: ServerConfig = {}) {
   app.use(cors({ origin: config.corsOrigin ?? '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }));
   app.use(express.json({ limit: '50mb' }));
   app.use(requestLoggerMiddleware);
+  app.use('/api', authMiddleware);
 
   app.use('/api/files', filesRouter);
   app.use('/api/agent', createAgentRouter(configDir, workspaceManager, llmGateway));

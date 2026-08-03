@@ -35,7 +35,15 @@ function buildRuntimeConfig(body: Record<string, unknown>, configDir: string, ll
     workspaceRoot: workspaceRoot || process.cwd(),
     mcpServers: mode === 'build' ? loadEnabledMcpServers(configDir) : undefined,
     memoryTokenBudget: cfg.memoryTokenBudget ? Number(cfg.memoryTokenBudget) : undefined,
+    enableBash: resolveEnableBash(),
   };
+}
+
+/** bash 工具开关:默认启用;OPENWORK_ENABLE_BASH=0/false 时关闭 */
+function resolveEnableBash(): boolean {
+  const v = process.env.OPENWORK_ENABLE_BASH;
+  if (v === undefined || v === '') return true;
+  return !(v === '0' || v.toLowerCase() === 'false');
 }
 
 interface StreamRequestBody {

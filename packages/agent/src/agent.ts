@@ -46,7 +46,7 @@ export class Agent {
     this.provider = createOpenAILLMProvider(config);
     this.workspaceRoot = workspaceRoot;
     this.tools = new ToolRegistry();
-    for (const tool of createDefaultTools()) {
+    for (const tool of createDefaultTools({ enableBash: config.enableBash })) {
       this.tools.register(tool);
     }
     if (extraTools) {

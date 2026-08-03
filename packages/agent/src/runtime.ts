@@ -24,6 +24,8 @@ export interface AgentRuntimeConfig {
   systemPrompt?: string;
   temperature?: number;
   maxTokens?: number;
+  /** 是否启用 bash 工具(默认 true)。远程部署建议设为 false。 */
+  enableBash?: boolean;
   workspaceRoot: string;
   mcpServers?: McpServerEntry[];
   maxTurns?: number;
@@ -101,6 +103,7 @@ export class AgentRuntime {
       systemPrompt: config.systemPrompt || DEFAULT_SYSTEM_PROMPT,
       temperature: config.temperature,
       maxTokens: config.maxTokens,
+      enableBash: config.enableBash,
     };
   }
 
