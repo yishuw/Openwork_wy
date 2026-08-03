@@ -626,43 +626,6 @@ data: {"done":true,"edits":[],"toolCalls":1}
 
 ---
 
-#### `POST /api/agent/apply-edits`
-
-Apply agent-generated edits to disk.
-
-**Request Body**
-
-```json
-{
-  "rootPath": "/path/to/project",
-  "edits": [
-    {
-      "path": "src/index.ts",
-      "operation": "create",
-      "content": "import express from 'express';\n\nconst app = express();"
-    },
-    {
-      "path": "README.md",
-      "operation": "modify",
-      "content": "# Updated Readme",
-      "original": "# Old Readme"
-    },
-    {
-      "path": "old-file.ts",
-      "operation": "delete"
-    }
-  ]
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `rootPath` | `string` | Yes | Root directory path |
-| `edits` | `AgentEditResult[]` | Yes | Edit operations (non-empty array) |
-
-**Response** `200`: Return value of `executeEdits()`
-
----
 
 ### 4. Workspace `/api/workspace`
 

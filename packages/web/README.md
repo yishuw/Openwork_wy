@@ -16,9 +16,8 @@ OpenWork 前端 —— 基于 Vue 3 + Vite + Monaco Editor + Pinia 的 AI 辅助
 | vue-i18n | 中 / 英文国际化 |
 | markdown-it + KaTeX | Agent 消息 Markdown / 数学公式渲染 |
 | `@vue-office/*` / docx-preview | Excel / PPTX / Word 文档预览 |
-| `@imengyu/vue3-context-menu` | 文件树右键菜单 |
 
-> 唯一的工作区依赖是 **`@openwork/agent`**（用于类型与 `parseEditsFromText` 等工具函数）。前端不直接执行 Agent 循环，而是通过 SSE 调用服务端。
+> 唯一的工作区依赖是 **`@openwork/agent`**（主要用于类型）。前端不直接执行 Agent 循环，而是通过 SSE 调用服务端。
 
 ## 目录结构
 
@@ -78,7 +77,6 @@ src/
 │   ├── configService.ts           # 配置 CRUD（Electron IPC / REST / localStorage）
 │   ├── llmService.ts              # LLM Provider REST 客户端（/api/llm/*）
 │   ├── mcpService.ts              # MCP 服务器 REST 客户端（/api/mcp/*）
-│   ├── editParser.ts              # 重导出 @openwork/agent 的 parseEditsFromText
 │   ├── editorInstance.ts          # Monaco 编辑器单例持有
 │   ├── markdown.ts                # Markdown 渲染（markdown-it + KaTeX）
 │   └── logger.ts                  # 前端结构化日志

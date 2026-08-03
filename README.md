@@ -80,10 +80,10 @@ npm run build:electron  # Electron 主进程
 |---|------|------|------|
 | 8 | Agent 对话面板 | ✅ | `AgentPanel.vue`, 支持 chat/edit/agent 三种模式、Markdown + KaTeX 渲染、多 Provider 配置管理 |
 | 9 | Agent 消息流式输出 (SSE) | ✅ | Server SSE + 前端 stream 解析已完整打通; 支持真实 LLM 流式响应 |
-| 10 | Agent 生成编辑操作并应用到文件 | ⚠️ | `<edit>` 区块解析 → 文件写入流程已打通; 服务端 `/api/agent/apply-edits` 端点已实现但前端未调用 `executor.ts`; 编辑/Agent 模式的 system prompt 在 `@openwork/agent` 中被硬编码为 `chat` 模式 (Bug) |
-| 11 | Agent 上下文构建 (打开文件+光标+选区) | ✅ | `@openwork/agent` — 上下文已在 Agent 消息构造内联组装; 但前端 `useAgent.ts` 未填充 `openFiles`, `fileTree` 等上下文到请求中 |
+| 10 | Agent 生成编辑操作并应用到文件 | ✅ | 编辑已下沉为 agent 内建工具（`FileEditTool` / `FileWriteTool`），在工具循环内直接落盘，不再有独立的 `<edit>` 块解析链路 |
+| 11 | Agent 上下文构建 (打开文件+光标+选区) | ✅ | `useAgent.ts` 组装 `IDESnapshot`（激活文件、其他 tab、文件树、光标/选区）随请求发送 |
 | 12 | 编辑操作撤销/重做 | ⚠️ | `@openwork/agent` — `revertEdits()` 已实现; 前端未接入 UI |
-| 13 | LLM 后端对接 (OpenAI / Anthropic / etc.) | ⚠️ | 已通过 raw fetch 对接 OpenAI 兼容 API (支持 Ollama / vLLM 等); 无 SDK 依赖; 编辑/Agent 模式 system prompt 硬编码 bug (#10) 待修复 |
+| 13 | LLM 后端对接 (OpenAI / Anthropic / etc.) | ✅ | 通过 raw fetch 对接 OpenAI 兼容 API（支持 Ollama / vLLM 等）; 无 SDK 依赖; `systemPrompt` 可通过配置注入 |
 
 ### P2 — 文件系统 & 项目管理
 
@@ -94,7 +94,7 @@ npm run build:electron  # Electron 主进程
 | 16 | 文件/文件夹重命名 | ✅ | 底层 API 已实现; 右键上下文菜单已集成 |
 | 17 | 文件/文件夹删除 | ✅ | 底层 API 已实现; 右键上下文菜单已集成 |
 | 18 | 新建文件/文件夹 | ✅️ | Server + Electron API 已实现; 新建文件/文件夹功能已集成至左上角File中 |
-| 19 | 文件监听 / 自动刷新 | ⚠️ | `IFileSystem.watch()` 已定义, `LocalFileSystem` 实现了; Server 有 `chokidar` 依赖但未启用推送; 前端未消费 |
+| 19 | 文件监听 / 自动刷新 | ⚠️ | `IFileSystem.watch()` 已定义, `LocalFileSystem` 实现了; 前端未消费 |
 | 20 | 拖拽文件到编辑器打开 | ✅️ | |
 | 21 | 最近打开的项目/文件列表 | ❌ | |
 | 22 | 工作区持久化 (记住上次打开目录) | ❌ | Pinia store 纯内存, 刷新即丢失 (仅 LLM Provider 配置持久化到 localStorage) |
@@ -121,7 +121,7 @@ npm run build:electron  # Electron 主进程
 | 33 | 服务器部署 (Express + 静态前端) | ✅ | `SERVE_STATIC` 环境变量指向 `web/dist` |
 | 34 | Electron 桌面应用 | ✅ | 支持 dev/prod 模式, IPC 文件操作, 文件对话框 |
 | 35 | Electron 原生菜单栏 | ✅ | File/Edit/Help 菜单含快捷键，`main.ts` 和 `main-server.ts` 均已实现 |
-| 36 | Electron 打包 / 安装程序 (electron-builder) | ⚠️ | `package.json` 已配置基本 `build` 字段 (appId, productName); 缺少平台目标 (win/mac/linux)、图标、自动更新等; 未验证 |
+| 36 | Electron 打包 / 安装程序 (electron-builder) | ⚠️ | `package.json` 已配置 `build` 字段 (appId, productName, win NSIS / linux AppImage+deb, 图标); 打包未在 CI 中验证 |
 | 37 | 路径遍历防护 | ✅ | Server file routes 已做 `resolve` → `startsWith` 校验 |
 | 38 | 认证 / 鉴权 (Bearer Token) | ⚠️ | 中间件已实现, 但 `index.ts` 中未被导入或挂载 (死代码) |
 | 39 | Docker 部署 | ❌ | |
@@ -133,7 +133,7 @@ npm run build:electron  # Electron 主进程
 |---|------|------|------|
 | 41 | 自适应布局 (可拖拽分隔条) | ✅ | `MainLayout.vue` — 侧边栏宽度可调 |
 | 42 | 状态栏 (光标位置、语言、编码) | ✅ | 自定义 `StatusBar.vue`，显示语言、实时行列位置、工作区模式 |
-| 43 | 右键上下文菜单 | ✅ | 文件树右键菜单 (`@imengyu/vue3-context-menu`)，支持重命名/删除/新建/剪切/复制/粘贴/复制路径 |
+| 43 | 右键上下文菜单 | ✅ | 文件树右键菜单（`NewFileTree` 内建 naive-ui 菜单），支持打开/重命名/删除/新建/剪切/复制/粘贴/复制路径/刷新 |
 | 44 | 错误/通知提示 (Toast) | ❌ | `useFileSystem.error` 有定义但未被任何 UI 渲染 |
 | 45 | 加载状态 / 骨架屏 | ⚠️ | 文件树及 Agent 面板已有文本型 "Loading..." 提示; 无骨架屏/动画 |
 | 46 | 国际化 (i18n) | ✅ | 中/英文通过 vue-i18n 实现，持久化到 localStorage，覆盖所有 UI 文本 |
@@ -146,8 +146,8 @@ npm run build:electron  # Electron 主进程
 
 | 状态 | 数量 |
 |------|------|
-| ✅ 已完成 | 27 |
-| ⚠️ 框架就绪 | 9 |
+| ✅ 已完成 | 29 |
+| ⚠️ 框架就绪 | 7 |
 | ❌ 未开始 | 14 |
 | **合计** | **50** |
 
@@ -159,7 +159,7 @@ npm run build:electron  # Electron 主进程
 
 ```mermaid
 graph TD
-    agent["@openwork/agent<br/>AI Agent 框架<br/><br/>· AgentRuntime（统一入口）<br/>· Agent / Session / ToolRegistry<br/>· LLMGateway / MCP Client (STDIO/HTTP/SSE)<br/>· executeEdits / parseEditsFromText"]
+    agent["@openwork/agent<br/>AI Agent 框架<br/><br/>· AgentRuntime（统一入口）<br/>· Agent / Session / ToolRegistry<br/>· LLMGateway / MCP Client (STDIO/HTTP/SSE)<br/>· 7 个默认工具（file_edit 等）"]
     server["@openwork/server<br/>Express 后端<br/><br/>· /api/files·agent·workspace·llm·mcp<br/>· LocalFileSystem（内置 fs/）<br/>· WorkspaceManager / 路径遍历防护"]
     web["@openwork/web<br/>Vue 3 前端<br/><br/>· Monaco Editor 封装 + 多格式查看器<br/>· AgentPanel 聊天 UI<br/>· useAgent / useFileSystem<br/>· agentService SSE 客户端"]
     electron["openwork-desktop<br/>Electron 桌面壳<br/><br/>· IPC 桥接 (preload.ts)<br/>· 原生文件对话框 / 菜单<br/>· main.ts / main-server.ts 双入口"]
@@ -234,16 +234,14 @@ flowchart TD
 flowchart TD
     U["用户输入消息"] --> M{"模式?"}
     M -->|plan| PL["AgentRuntime 直接调用 LLM<br/>流式输出文本"]
-    M -->|build| BD["AgentRuntime + Session<br/>多轮工具循环（read_file / bash / …）"]
+    M -->|build| BD["AgentRuntime + Session<br/>多轮工具循环（read_file / file_edit / bash / …）"]
     PL --> SSE["Server SSE：chunk / thinking / tool_* 事件"]
     BD --> SSE
-    SSE --> DONE["done 事件携带 edits（ParsedEdit[]）"]
-    DONE --> AP["前端可选调用 applyEdits<br/>POST /api/agent/apply-edits"]
-    AP --> EX["executeEdits() 写入文件系统"]
-    EX --> RF["刷新编辑器 Tab + 文件树"]
+    SSE --> DONE["done 事件"]
+    DONE --> REF["前端刷新编辑器 Tab + 文件树"]
 ```
 
-**说明**：Agent 逻辑全部在 `@openwork/agent` 的 `AgentRuntime` 中执行（服务端持有实例）。`plan` 模式直接流式调用 LLM；`build` 模式运行多轮工具循环。最终 `done` 事件携带从回复中解析出的 `<edit>` 块；编辑通过 `executeEdits()` 写入文件系统。
+**说明**：Agent 逻辑全部在 `@openwork/agent` 的 `AgentRuntime` 中执行（服务端持有实例）。`plan` 模式直接流式调用 LLM；`build` 模式运行多轮工具循环。文件编辑由 agent 内建工具（`FileEditTool` / `FileWriteTool`）在循环内直接写入文件系统（有 read 前置校验），完成后由前端刷新 UI。
 
 ### 4. 时序图 — 工作区打开与 Agent 会话持久化
 
@@ -294,7 +292,7 @@ sequenceDiagram
 | `AgentRuntime` | **对外统一入口**：plan/build 模式、会话管理、MCP 集成、编辑应用 |
 | `Agent` | 单 Agent 多轮工具调用循环 |
 | `Session` | 主 Agent + 子 Agent 编排，`<delegate>` 路由，流式 |
-| `ToolRegistry` / `ITool` | 工具注册表与工具接口（5 个默认工具） |
+| `ToolRegistry` / `ITool` | 工具注册表与工具接口（7 个默认工具） |
 | `McpManager` | 多 MCP 服务器连接管理，工具发现与路由 |
 | `LLMGateway` | LLM 提供商配置管理与持久化 |
 
@@ -323,7 +321,6 @@ sequenceDiagram
 | POST | `/api/files/rename` | 重命名 `{ oldPath, newPath, root }` |
 | POST | `/api/agent/chat` | 发送消息给 Agent |
 | POST | `/api/agent/stream` | 流式返回 Agent 响应 (SSE) |
-| POST | `/api/agent/apply-edits` | 应用 AI 生成的编辑操作到文件 |
 | GET/POST | `/api/workspace/open·info·update·close` | 工作区生命周期管理 |
 | GET/POST/DELETE | `/api/workspace/sessions` | Agent 会话持久化（增删查） |
 | GET | `/api/workspace/roots·browse` | 系统根目录列表 / 浏览文件系统 |
@@ -392,7 +389,7 @@ tools.forEach(t => agent.registerTool(t));
 
 | 包 | 角色 | 关键内容 | 详细文档 |
 |----|------|----------|----------|
-| `@openwork/agent` | AI Agent 框架 | `AgentRuntime`（统一入口）、`Agent`/`Session`、5 个默认工具、`McpManager`、`LLMGateway`、`executeEdits`/`parseEditsFromText`、结构化日志、CLI | [packages/agent/README.md](packages/agent/README.md) |
+| `@openwork/agent` | AI Agent 框架 | `AgentRuntime`（统一入口）、`Agent`/`Session`、7 个默认工具（file_edit/file_write/read_file/list_dir/search_code/bash/delegate）、`McpManager`、`LLMGateway`、`parseToolCalls`、结构化日志、CLI | [packages/agent/README.md](packages/agent/README.md) |
 | `@openwork/server` | Express 后端 | `createApp`/`startServer`、`fs/`（`LocalFileSystem`）、`routes/`（files·agent·workspace·llm·mcp·config）、`WorkspaceManager`、请求日志中间件 | [packages/server/README.md](packages/server/README.md) |
 | `@openwork/web` | Vue 3 前端 | `MonacoEditor` + 多格式查看器、`AgentPanel`、文件树、MCP/设置面板、`composables/`、`services/`（`fileService` 等）、`stores/`（editor/sessions/settings）、i18n | [packages/web/README.md](packages/web/README.md) |
 | `openwork-desktop` | Electron 桌面壳 | `main.ts`/`main-server.ts` 双入口、`preload.ts`（`window.electronAPI`）、`ipc/file-handler.ts`、原生菜单、`vibe://` 协议 | [packages/electron/README.md](packages/electron/README.md) |
@@ -401,4 +398,4 @@ tools.forEach(t => agent.registerTool(t));
 
 ---
 
-> 贡献者指南详见 [CLAUDE.md](CLAUDE.md) —— 包含完整的脚本参考、架构设计、组件数据流和开发约定。
+> 贡献者指南详见 [CONTRIBUTING.md](CONTRIBUTING.md) —— 包含脚本参考、分支/提交流程与开发约定。

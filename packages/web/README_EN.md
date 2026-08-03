@@ -16,9 +16,8 @@ OpenWork frontend — an AI-assisted code editor built on Vue 3 + Vite + Monaco 
 | vue-i18n | Chinese / English i18n |
 | markdown-it + KaTeX | Agent message Markdown / math rendering |
 | `@vue-office/*` / docx-preview | Excel / PPTX / Word document preview |
-| `@imengyu/vue3-context-menu` | File-tree context menu |
 
-> The only workspace dependency is **`@openwork/agent`** (for types and helpers like `parseEditsFromText`). The frontend does not run the agent loop itself — it calls the server over SSE.
+> The only workspace dependency is **`@openwork/agent`** (mainly for types). The frontend does not run the agent loop itself — it calls the server over SSE.
 
 ## Directory layout
 
@@ -58,7 +57,6 @@ src/
 │   ├── configService.ts           # Config CRUD (Electron IPC / REST / localStorage)
 │   ├── llmService.ts              # LLM provider REST client (/api/llm/*)
 │   ├── mcpService.ts              # MCP server REST client (/api/mcp/*)
-│   ├── editParser.ts              # Re-exports parseEditsFromText from @openwork/agent
 │   ├── editorInstance.ts          # Monaco editor singleton holder
 │   ├── markdown.ts                # Markdown rendering (markdown-it + KaTeX)
 │   └── logger.ts                  # Frontend structured logging

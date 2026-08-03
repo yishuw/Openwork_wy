@@ -27,7 +27,7 @@ src/
 ├── session.ts          # Session —— 主/子 Agent 编排、<delegate> 委派、流式
 ├── tool-registry.ts    # ToolRegistry —— 工具注册、查找、系统提示生成
 ├── tools/
-│   ├── index.ts        # createDefaultTools() —— 5 个默认工具
+│   ├── index.ts        # createDefaultTools() —— 7 个默认工具
 │   ├── read-file.ts    # <read_file>   读取文件
 │   ├── list-dir.ts     # <list_dir>    列目录
 │   ├── search-code.ts  # <search_code> 搜索代码
@@ -44,12 +44,11 @@ src/
 │   ├── index.ts        # 重导出 LLMGateway 等
 │   └── gateway.ts      # LLMGateway —— LLM 提供商 CRUD + 持久化（llm-settings.json）
 ├── openai-client.ts    # createOpenAILLMProvider() / buildMessages() / resolveLLMConfig()
-├── executor.ts         # executeEdits() / revertEdits() —— 编辑应用与回滚
-├── parser.ts           # parseEditsFromText() —— 解析 <edit path="...">…</edit>
+├── parser.ts           # parseToolCalls() —— 解析 LLM 回复中的工具调用（XML 块）
 ├── logger.ts           # createLogger() / runWithContext() —— 结构化日志
 ├── log-categories.ts   # LOG_CATEGORY 日志分类常量
 ├── cli.ts              # 交互式 CLI Agent（支持 MCP 工具）
-└── types/              # 类型定义（agent / message / filesystem / tool / provider / edit）
+└── types/              # 类型定义（agent / message / filesystem / tool / provider）
 ```
 
 ## 公共 API（`index.ts`）
@@ -58,8 +57,8 @@ src/
 |------|------|------|
 | `AgentRuntime` | `runtime.ts` | **统一入口**：封装 plan/build 模式、会话管理与 MCP |
 | `AgentRuntimeConfig` / `AgentRuntimeEvent` / `ChatResult` | `runtime.ts` | Runtime 配置与流式事件类型 |
-| `executeEdits` / `revertEdits` / `ExecutionResult` | `executor.ts` | 批量应用 / 回滚 AI 生成的文件编辑 |
-| `parseEditsFromText` / `ParsedEdit` | `parser.ts` | 从 LLM 回复中解析 `<edit>` 块 |
+| `executeEdits` 已废弃 | — | 编辑能力已下沉为 `FileEditTool` / `FileWriteTool`，在工具循环内直接写入文件系统 |
+| `parseToolCalls` / `ParsedTool` | `parser.ts` | 从 LLM 回复中解析工具调用块 |
 | `LLMGateway` / `maskApiKey` / `LLMProvider` / `LLMSettings` | `llm/gateway.ts` | LLM 提供商配置管理（持久化） |
 | `McpManager` / `McpToolInfo` | `mcp/manager.ts` | MCP 多服务器连接管理 |
 | MCP 配置类型 | `mcp/config.ts` | `McpServerConfig` / `McpConfig` / `McpServerEntry` 等 |
@@ -83,7 +82,6 @@ src/
 | MCP | `build` 模式下按 `mcpServers` 连接 MCP 服务器并把工具注入 Agent；支持 `reinitialize()` 热更新 |
 | 会话管理 | `getSessionMessages` / `restoreSession` / `getSessionIds` / `deleteSession` |
 | 文件系统 | 未显式传入 `fileSystem` 时，按 `workspaceRoot` 创建带路径穿越防护的默认实现 |
-| `applyEdits()` | 通过 `executeEdits` 将编辑写入文件系统 |
 | 默认文件系统 | 内置 `IAgentFileSystem`，对路径做 `resolve → startsWith` 越权校验 |
 
 **流式事件**（`AgentRuntimeEvent.type`）：`chunk` / `thinking` / `tool_start` / `tool_end` / `tool_result` / `done` / `error`。
@@ -95,14 +93,16 @@ src/
 
 ### 默认工具（`tools/`）
 
-`createDefaultTools()` 返回 5 个工具：
+`createDefaultTools()` 返回 7 个工具（`enableBash: false` 时不注册 bash）：
 
 | 工具 | 标签 | 说明 |
 |------|------|------|
-| `ReadFileTool` | `<read_file path="..."/>` | 读取文件 |
+| `FileEditTool` | `<file_edit path="...">` | 修改现有文件（diff 语义，需先 `read_file`） |
+| `FileWriteTool` | `<file_write path="...">` | 新建文件或整文件重写（覆盖已有文件需先 `read_file`） |
+| `FileReadTool` | `<read_file path="..."/>` | 读取文件（编辑类工具的前置校验依据） |
 | `ListDirTool` | `<list_dir path="..."/>` | 列出目录内容 |
 | `SearchCodeTool` | `<search_code pattern="..."/>` | 搜索代码 |
-| `BashTool` | `<bash>...</bash>` | 执行 shell 命令 |
+| `BashTool` | `<bash>...</bash>` | 执行 shell 命令（可通过 `enableBash` 关闭） |
 | `DelegateTool` | `<delegate>...</delegate>` | 委派子 Agent |
 
 ### LLM Gateway（`llm/gateway.ts`）
@@ -123,7 +123,7 @@ src/
 ## 使用示例
 
 ```typescript
-import { AgentRuntime, executeEdits } from '@openwork/agent';
+import { AgentRuntime } from '@openwork/agent';
 
 // 1. 创建 Runtime（build 模式：多轮工具循环）
 const runtime = new AgentRuntime({
@@ -142,13 +142,8 @@ const result = await runtime.chatStream(
   }
 );
 
-// 3. 应用解析出的编辑
-if (result.edits.length > 0) {
-  await runtime.applyEdits(
-    result.edits.map(e => ({ path: e.path, operation: 'modify', content: e.content }))
-  );
-}
 ```
+
 
 ## 技术细节
 

@@ -626,43 +626,6 @@ data: {"done":true,"edits":[],"toolCalls":1}
 
 ---
 
-#### `POST /api/agent/apply-edits`
-
-将 Agent 生成的编辑操作应用到磁盘。
-
-**请求体**
-
-```json
-{
-  "rootPath": "/path/to/project",
-  "edits": [
-    {
-      "path": "src/index.ts",
-      "operation": "create",
-      "content": "import express from 'express';\n\nconst app = express();"
-    },
-    {
-      "path": "README.md",
-      "operation": "modify",
-      "content": "# Updated Readme",
-      "original": "# Old Readme"
-    },
-    {
-      "path": "old-file.ts",
-      "operation": "delete"
-    }
-  ]
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `rootPath` | `string` | 是 | 根目录路径 |
-| `edits` | `AgentEditResult[]` | 是 | 编辑操作列表（非空数组） |
-
-**响应** `200`：`executeEdits()` 的返回值
-
----
 
 ### 4. 工作区 `/api/workspace`
 
