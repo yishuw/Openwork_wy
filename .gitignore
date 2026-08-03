@@ -35,3 +35,6 @@ AGENTS.md
 CLAUDE.md
 .opencode/
 .claude/
+
+# Runtime workspace data (written by WorkspaceManager)
+.openwork/

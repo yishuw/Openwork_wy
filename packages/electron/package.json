@@ -8,9 +8,13 @@
     "build:tsc": "tsc",
     "dev": "electron .",
     "prepack": "npm run copy:assets && npm run copy:web",
-    "pack": "npm run build && npm run prepack && electron-builder --dir",
-    "dist": "npm run build && npm run prepack && electron-builder",
-    "copy:assets": "node -e \"const{cpSync}=require('fs');cpSync('../../app-info.json','app-info.json');cpSync('../../app-config.json','app-config.json');cpSync('../../config/provider-settings.json','provider-settings.json');cpSync('../../config/mcp-settings.json','mcp-settings.json')\"",
+    "pack:win": "npm run build && npm run prepack && electron-builder --dir --win",
+    "pack:linux": "npm run build && npm run prepack && electron-builder --dir --linux",
+    "dist:win": "npm run build && npm run prepack && electron-builder --win",
+    "dist:linux": "npm run build && npm run prepack && electron-builder --linux",
+    "pack": "npm run pack:win",
+    "dist": "npm run dist:win",
+    "copy:assets": "node -e \"const{cpSync,existsSync}=require('fs');const files=[['../../app-info.json','app-info.json'],['../../app-config.json','app-config.json'],['../../config/provider-settings.json','provider-settings.json'],['../../config/mcp-settings.json','mcp-settings.json']];files.forEach(([s,d])=>{if(existsSync(s)){cpSync(s,d);console.log('copied',d)}else{console.log('skip (not found)',d)}})\"",
     "copy:web": "node -e \"const{cp}=require('fs/promises');cp('../web/dist','web-dist',{recursive:true,dereference:true}).then(()=>console.log('web-dist copied'))\""
   },
   "dependencies": {
@@ -48,9 +52,10 @@
     "npmRebuild": false,
     "includeSubNodeModules": true,
     "asar": true,
+    "icon": "build/icon",
     "win": {
       "target": "nsis",
-      "icon": null
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -58,6 +63,17 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
+    },
+    "linux": {
+      "category": "Development",
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb", "arch": ["x64"] }
+      ],
+      "icon": "build/icons"
+    },
+    "deb": {
+      "depends": ["libgtk-3-0", "libnotify4", "libnss3", "libxss1", "libxtst6", "xdg-utils", "libatspi2.0-0", "libsecret-1-0"]
     }
   }
 }
