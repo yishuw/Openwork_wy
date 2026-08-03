@@ -38,7 +38,6 @@
         >
           <template v-slot:explorer>
             <NewFileTree
-              v-if="useNewFileTree"
               :nodes="store.fileTreeNodes"
               :workspace-root="store.workspaceRoot"
               :workspace-mode="store.workspaceMode"
@@ -53,25 +52,6 @@
               @select-file="fs.openAndReadFile"
               @expand-dir="handleExpandDir"
               @menu-action="handleNewMenuAction"
-              @confirm-rename="handleConfirmRename"
-              @confirm-create="handleConfirmCreate"
-              @cancel-create="handleCancelCreate"
-            />
-            <FileTree
-              v-else
-              :nodes="store.fileTreeNodes"
-              :workspace-root="store.workspaceRoot"
-              :workspace-mode="store.workspaceMode"
-              :loading="fs.isLoading"
-              :expanded-dirs="expandedDirs"
-              :loading-dirs="loadingDirs"
-              :dir-children="dirChildren"
-              :renaming-path="renamingPath"
-              :creating-in-dir="creatingInDir"
-              :creating-node-key="creatingNodeKey"
-              @select-file="fs.openAndReadFile"
-              @expand-dir="handleExpandDir"
-              @contextmenu="handleContextMenu"
               @confirm-rename="handleConfirmRename"
               @confirm-create="handleConfirmCreate"
               @cancel-create="handleCancelCreate"
@@ -174,18 +154,7 @@
       <div v-if="activeRightPanel" class="right-resize-handle" @mousedown="startRightPanelResize"></div>
       <div v-if="activeRightPanel" class="right-sidebar" :style="{ width: rightPanelWidth + 'px' }">
         <template v-if="activeRightPanel === 'agent'">
-          <div class="agent-ui-toggle">
-            <n-button
-              size="tiny"
-              text
-              :type="useChatBUI ? 'primary' : 'default'"
-              @click="toggleChatUI"
-            >
-              {{ useChatBUI ? 'B' : 'A' }}
-            </n-button>
-          </div>
-          <AgentPanel v-if="!useChatBUI" @open-settings="handleOpenSettings('ai')" />
-          <AgentChatB v-else @open-settings="handleOpenSettings('ai')" />
+          <AgentChatB @open-settings="handleOpenSettings('ai')" />
         </template>
         <McpSettingsPanel v-else-if="activeRightPanel === 'mcp'" />
       </div>
@@ -302,7 +271,6 @@ import Toolbar from '../toolbar/Toolbar.vue';
 import { webFileLog } from '../../services/logger';
 import SideBar from './SideBar.vue';
 import type { SideBarSection } from './SideBar.vue';
-import FileTree from '../file-tree/FileTree.vue';
 import { NewFileTree } from '../new-file-tree';
 import type { ContextMenuPayload } from '../new-file-tree';
 import MonacoEditor from '../editor/MonacoEditor.vue';
@@ -313,8 +281,7 @@ import PptxViewer from '../editor/PptxViewer.vue';
 import PdfViewer from '../editor/PdfViewer.vue';
 import HtmlViewer from '../editor/HtmlViewer.vue';
 import MarkdownViewer from '../editor/MarkdownViewer.vue';
-import { AgentPanel } from '../agent';
-import AgentChatB from '../agent/AgentChatB.vue';
+import { AgentChatB } from '../agent';
 import McpSettingsPanel from '../mcp/McpSettingsPanel.vue';
 import RightToolbar from './RightToolbar.vue';
 import type { RightToolbarItem } from './RightToolbar.vue';
@@ -348,17 +315,7 @@ const showSettingsModal = ref(false);
 const showSearchPopup = ref(false);
 const initialSettingsTab = ref('general');
 
-const { renamingPath, creatingInDir, creatingNodeKey, handleContextMenu, handleConfirmRename, handleConfirmCreate, handleCancelCreate } = useFileTreeContextMenu(fs, store, t, { clearDirState, handleExpandDir });
-
-// ===== 文件树切换 =====
-const useNewFileTree = ref(true);
-
-// Agent UI v2 开关 (B 组件);持久化到 localStorage
-const useChatBUI = ref(localStorage.getItem('vibe-chat-ui-v2') === 'true');
-const toggleChatUI = () => {
-  useChatBUI.value = !useChatBUI.value;
-  localStorage.setItem('vibe-chat-ui-v2', String(useChatBUI.value));
-};
+const { renamingPath, creatingInDir, creatingNodeKey, handleConfirmRename, handleConfirmCreate, handleCancelCreate } = useFileTreeContextMenu(fs, store, t, { clearDirState, handleExpandDir });
 
 const activeTabValue = computed<string | undefined>({
   get: () => store.activeTabId ?? undefined,
