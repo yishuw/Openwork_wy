@@ -24,15 +24,20 @@ export { FileEditTool } from './file-edit';
  *   2. file_write  —— 仅用于新建或整文件重写(默认场景禁用)
  *   3. read_file   —— 编辑前必读(支撑 file_edit/file_write 的前置校验)
  *   4-7. 其余探索 / 执行 / 委托工具
+ *
+ * enableBash=false 时 bash 工具不会注册(不进系统提示词,LLM 不会尝试调用)。
  */
-export function createDefaultTools(): ITool[] {
-  return [
+export function createDefaultTools(options?: { enableBash?: boolean }): ITool[] {
+  const tools: ITool[] = [
     new FileEditTool(),
     new FileWriteTool(),
     new FileReadTool(),
     new ListDirTool(),
     new SearchCodeTool(),
-    new BashTool(),
-    new DelegateTool(),
   ];
+  if (options?.enableBash !== false) {
+    tools.push(new BashTool());
+  }
+  tools.push(new DelegateTool());
+  return tools;
 }

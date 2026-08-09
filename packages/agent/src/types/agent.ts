@@ -12,6 +12,8 @@ export interface AgentConfig {
   systemPrompt?: string;
   temperature?: number;
   maxTokens?: number;
+  /** 是否启用 bash 工具(默认 true)。远程部署建议关闭。 */
+  enableBash?: boolean;
 }
 
 /** Agent 预置定义 —— 绑定提示词、模型、温度等预设 */

@@ -1,5 +1,10 @@
 node_modules/
 dist/
+*.tsbuildinfo
+# tsc 误产物(tsconfig.test.json 类型检查时可能泄出)
+packages/agent/test/*.js
+packages/agent/test/*.d.ts
+packages/agent/test/*.map
 .env
 *.tsbuildinfo
 .DS_Store
@@ -35,3 +40,6 @@ AGENTS.md
 CLAUDE.md
 .opencode/
 .claude/
+
+# Runtime workspace data (written by WorkspaceManager)
+.openwork/

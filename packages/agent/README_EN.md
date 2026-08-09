@@ -26,12 +26,11 @@ src/
 ├── agent.ts            # Agent — single-agent multi-turn tool loop
 ├── session.ts          # Session — main/sub-agent orchestration, <delegate>, streaming
 ├── tool-registry.ts    # ToolRegistry — registration, lookup, system-prompt generation
-├── tools/              # 5 default tools (read_file, list_dir, search_code, bash, delegate)
+├── tools/              # 7 default tools (file_edit, file_write, read_file, list_dir, search_code, bash, delegate)
 ├── mcp/                # McpManager, MCPClient, MCPToolAdapter, ToolCatalog, config
 ├── llm/                # LLMGateway — provider CRUD + persistence (llm-settings.json)
 ├── openai-client.ts    # createOpenAILLMProvider() / buildMessages() / resolveLLMConfig()
-├── executor.ts         # executeEdits() / revertEdits()
-├── parser.ts           # parseEditsFromText() — parses <edit path="...">…</edit>
+├── parser.ts           # parseToolCalls() — parses tool-call blocks from an LLM reply
 ├── logger.ts           # createLogger() / runWithContext()
 ├── log-categories.ts   # LOG_CATEGORY constants
 ├── cli.ts              # Interactive CLI agent (MCP-aware)
@@ -44,8 +43,7 @@ src/
 |--------|--------|---------|
 | `AgentRuntime` | `runtime.ts` | **Unified entry**: wraps plan/build modes, session management, and MCP |
 | `AgentRuntimeConfig` / `AgentRuntimeEvent` / `ChatResult` | `runtime.ts` | Runtime config and streaming event types |
-| `executeEdits` / `revertEdits` / `ExecutionResult` | `executor.ts` | Apply / revert AI-generated file edits |
-| `parseEditsFromText` / `ParsedEdit` | `parser.ts` | Extract `<edit>` blocks from an LLM reply |
+| `parseToolCalls` / `ParsedTool` | `parser.ts` | Parse tool-call blocks from an LLM reply |
 | `LLMGateway` / `maskApiKey` / `LLMProvider` / `LLMSettings` | `llm/gateway.ts` | LLM provider configuration management (persisted) |
 | `McpManager` / `McpToolInfo` | `mcp/manager.ts` | MCP multi-server connection management |
 | MCP config types | `mcp/config.ts` | `McpServerConfig` / `McpConfig` / `McpServerEntry`, etc. |
@@ -69,7 +67,6 @@ The single recommended entry point. One `AgentRuntime` instance is bound to a wo
 | MCP | In `build` mode connects MCP servers from `mcpServers` and injects their tools; `reinitialize()` for hot reload |
 | Sessions | `getSessionMessages` / `restoreSession` / `getSessionIds` / `deleteSession` |
 | File system | When no `fileSystem` is provided, a default implementation with path-traversal protection is created from `workspaceRoot` |
-| `applyEdits()` | Writes edits to the file system via `executeEdits` |
 
 **Streaming events** (`AgentRuntimeEvent.type`): `chunk` / `thinking` / `tool_start` / `tool_end` / `tool_result` / `done` / `error`.
 
@@ -108,7 +105,7 @@ Transports: **STDIO** (local subprocess) / **HTTP** (stateless POST) / **SSE** (
 ## Usage example
 
 ```typescript
-import { AgentRuntime, executeEdits } from '@openwork/agent';
+import { AgentRuntime } from '@openwork/agent';
 
 // 1. Create the runtime (build mode: multi-turn tool loop)
 const runtime = new AgentRuntime({
@@ -127,13 +124,8 @@ const result = await runtime.chatStream(
   }
 );
 
-// 3. Apply the parsed edits
-if (result.edits.length > 0) {
-  await runtime.applyEdits(
-    result.edits.map(e => ({ path: e.path, operation: 'modify', content: e.content }))
-  );
-}
 ```
+
 
 ## Technical notes
 

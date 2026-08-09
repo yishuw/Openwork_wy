@@ -80,10 +80,10 @@ npm run build:electron  # Electron main process
 |---|---------|--------|-------|
 | 8 | Agent chat panel | ✅ | `AgentPanel.vue`, supports chat/edit/agent modes, Markdown + KaTeX rendering, multi-provider config management |
 | 9 | Agent streaming response (SSE) | ✅ | Server SSE + frontend stream parsing fully working with real LLM backend |
-| 10 | Agent generates edits and applies to files | ⚠️ | `<edit>` tag parsing → file writing pipeline works end-to-end; `/api/agent/apply-edits` endpoint exists on server but `executor.ts` from `@openwork/agent` not wired to frontend; edit/agent mode system prompt hardcoded to `chat` in `@openwork/agent` (bug) |
-| 11 | Agent context builder (open files + cursor + selection) | ✅ | `@openwork/agent` — context is assembled inline within the Agent's message construction; frontend `useAgent.ts` does not populate `openFiles`/`fileTree` context in requests |
+| 10 | Agent generates edits and applies to files | ✅ | Edits are built-in agent tools (`FileEditTool`/`FileWriteTool`) that write files directly inside the tool loop; no separate `<edit>`-block pipeline |
+| 11 | Agent context builder (open files + cursor + selection) | ✅ | `useAgent.ts` builds an `IDESnapshot` (active file, other tabs, file tree, cursor/selection) and sends it with each request |
 | 12 | Edit undo / redo | ⚠️ | `@openwork/agent` — `revertEdits()` implemented; not wired to frontend UI |
-| 13 | LLM backend integration (OpenAI / Anthropic / etc.) | ⚠️ | OpenAI-compatible API via raw fetch (works with Ollama, vLLM, etc.); no SDK dependencies; edit/agent mode system prompt bug (#10) needs fix |
+| 13 | LLM backend integration (OpenAI / Anthropic / etc.) | ✅ | OpenAI-compatible API via raw fetch (works with Ollama, vLLM, etc.); no SDK dependencies; `systemPrompt` is configurable |
 
 ### P2 — File System & Project Management
 
@@ -94,7 +94,7 @@ npm run build:electron  # Electron main process
 | 16 | File / folder rename | ✅ | Backend API implemented; context menu integrated |
 | 17 | File / folder delete | ✅ | Backend API implemented; context menu integrated |
 | 18 | New file / folder creation | ✅ | Server + Electron API implemented; integrated into File menu dropdown with Ctrl+N keyboard shortcut |
-| 19 | File watching / auto-refresh | ⚠️ | `IFileSystem.watch()` defined, `LocalFileSystem` implemented; server has `chokidar` dependency but push not active; frontend not consuming |
+| 19 | File watching / auto-refresh | ⚠️ | `IFileSystem.watch()` defined, `LocalFileSystem` implemented; frontend not consuming |
 | 20 | Drag and drop files to open | ✅ | `MainLayout.vue` with visual drop overlay; supports both Electron (native paths) and browser (FileSystemDirectoryHandle) |
 | 21 | Recent projects / files list | ❌ | |
 | 22 | Workspace persistence (remember last opened folder) | ❌ | Pinia store is in-memory only, lost on refresh (only LLM provider configs persist to localStorage) |
@@ -133,7 +133,7 @@ npm run build:electron  # Electron main process
 |---|---------|--------|-------|
 | 41 | Resizable layout (draggable splitter) | ✅ | `MainLayout.vue` — adjustable sidebar width |
 | 42 | Status bar (cursor position, language, encoding) | ✅ | Custom `StatusBar.vue` showing language, live line/column, workspace mode |
-| 43 | Context menus (right-click) | ✅ | File tree context menu via `@imengyu/vue3-context-menu` with rename, delete, new, cut/copy/paste, copy paths |
+| 43 | Context menus (right-click) | ✅ | File tree context menu built into `NewFileTree` (naive-ui) with open, rename, delete, new, cut/copy/paste, copy paths, refresh |
 | 44 | Error / notification toasts | ❌ | `useFileSystem.error` ref exists but never rendered by any UI |
 | 45 | Loading states / skeletons | ⚠️ | Text-based "Loading..." indicators exist in FileTree and AgentPanel; no skeletons/animations |
 | 46 | Internationalization (i18n) | ✅ | Chinese/English via vue-i18n, persisted to localStorage, covers all UI text |
@@ -146,8 +146,8 @@ npm run build:electron  # Electron main process
 
 | Status | Count |
 |--------|-------|
-| ✅ Done | 27 |
-| ⚠️ Scaffold ready | 9 |
+| ✅ Done | 29 |
+| ⚠️ Scaffold ready | 7 |
 | ❌ Not started | 14 |
 | **Total** | **50** |
 
@@ -159,7 +159,7 @@ npm run build:electron  # Electron main process
 
 ```mermaid
 graph TD
-    agent["@openwork/agent<br/>AI Agent Framework<br/><br/>· AgentRuntime (unified entry)<br/>· Agent / Session / ToolRegistry<br/>· LLMGateway / MCP Client (STDIO/HTTP/SSE)<br/>· executeEdits / parseEditsFromText"]
+    agent["@openwork/agent<br/>AI Agent Framework<br/><br/>· AgentRuntime (unified entry)<br/>· Agent / Session / ToolRegistry<br/>· LLMGateway / MCP Client (STDIO/HTTP/SSE)<br/>· 7 default tools (file_edit etc.)"]
     server["@openwork/server<br/>Express Backend<br/><br/>· /api/files·agent·workspace·llm·mcp<br/>· LocalFileSystem (built-in fs/)<br/>· WorkspaceManager / path traversal protection"]
     web["@openwork/web<br/>Vue 3 Frontend<br/><br/>· Monaco wrapper + multi-format viewers<br/>· AgentPanel chat UI<br/>· useAgent / useFileSystem<br/>· agentService SSE client"]
     electron["openwork-desktop<br/>Electron Desktop Shell<br/><br/>· IPC bridge (preload.ts)<br/>· Native file dialogs / menus<br/>· main.ts / main-server.ts dual entry"]
@@ -238,12 +238,10 @@ flowchart TD
     PL --> SSE["Server SSE: chunk / thinking / tool_* events"]
     BD --> SSE
     SSE --> DONE["done event carries edits (ParsedEdit[])"]
-    DONE --> AP["Frontend may call applyEdits<br/>POST /api/agent/apply-edits"]
-    AP --> EX["executeEdits() writes to the file system"]
-    EX --> RF["Refresh editor tabs + file tree"]
+    DONE --> REF["Refresh editor tabs + file tree"]
 ```
 
-**Note**: All agent logic runs inside `AgentRuntime` in `@openwork/agent` (the instance lives on the server). `plan` mode streams the LLM directly; `build` mode runs the multi-turn tool loop. The final `done` event carries the `<edit>` blocks parsed from the reply; edits are written via `executeEdits()`.
+**Note**: All agent logic runs inside `AgentRuntime` in `@openwork/agent` (the instance lives on the server). `plan` mode streams the LLM directly; `build` mode runs the multi-turn tool loop. File edits are written directly by the built-in tools (`FileEditTool`/`FileWriteTool`, with a read-first guard); the frontend refreshes after the stream ends.
 
 ### 4. Sequence Diagram — Workspace Open & Agent Session Persistence
 
@@ -294,7 +292,7 @@ sequenceDiagram
 | `AgentRuntime` | **Unified entry**: plan/build modes, session management, MCP integration, edit application |
 | `Agent` | Single-agent multi-turn tool-using loop |
 | `Session` | Main + sub-agent orchestration, `<delegate>` routing, streaming |
-| `ToolRegistry` / `ITool` | Tool registry and tool interface (5 default tools) |
+| `ToolRegistry` / `ITool` | Tool registry and tool interface (7 default tools) |
 | `McpManager` | Multi-server MCP connection management, tool discovery & routing |
 | `LLMGateway` | LLM provider configuration management and persistence |
 
@@ -323,7 +321,6 @@ sequenceDiagram
 | POST | `/api/files/rename` | Rename `{ oldPath, newPath, root }` |
 | POST | `/api/agent/chat` | Send message to agent |
 | POST | `/api/agent/stream` | Stream agent response (SSE) |
-| POST | `/api/agent/apply-edits` | Apply AI-generated edits to files |
 | GET/POST | `/api/workspace/open·info·update·close` | Workspace lifecycle |
 | GET/POST/DELETE | `/api/workspace/sessions` | Agent session persistence (create/delete/list) |
 | GET | `/api/workspace/roots·browse` | List system roots / browse the file system |
@@ -392,7 +389,7 @@ The repo is an npm workspace with **4 packages** (each has its own README; the t
 
 | Package | Role | Key contents | Detailed docs |
 |---------|------|--------------|---------------|
-| `@openwork/agent` | AI Agent framework | `AgentRuntime` (unified entry), `Agent`/`Session`, 5 default tools, `McpManager`, `LLMGateway`, `executeEdits`/`parseEditsFromText`, structured logging, CLI | [packages/agent/README.md](packages/agent/README.md) |
+| `@openwork/agent` | AI Agent framework | `AgentRuntime` (unified entry), `Agent`/`Session`, 7 default tools (file_edit/file_write/read_file/list_dir/search_code/bash/delegate), `McpManager`, `LLMGateway`, `parseToolCalls`, structured logging, CLI | [packages/agent/README.md](packages/agent/README.md) |
 | `@openwork/server` | Express backend | `createApp`/`startServer`, `fs/` (`LocalFileSystem`), `routes/` (files·agent·workspace·llm·mcp·config), `WorkspaceManager`, request-logging middleware | [packages/server/README.md](packages/server/README.md) |
 | `@openwork/web` | Vue 3 frontend | `MonacoEditor` + multi-format viewers, `AgentPanel`, file tree, MCP/settings panels, `composables/`, `services/` (`fileService`, etc.), `stores/` (editor/sessions/settings), i18n | [packages/web/README.md](packages/web/README.md) |
 | `openwork-desktop` | Electron desktop shell | `main.ts`/`main-server.ts` dual entry, `preload.ts` (`window.electronAPI`), `ipc/file-handler.ts`, native menus, `vibe://` protocol | [packages/electron/README.md](packages/electron/README.md) |
@@ -401,4 +398,4 @@ The repo is an npm workspace with **4 packages** (each has its own README; the t
 
 ---
 
-> For contributor guidance, see [CLAUDE.md](CLAUDE.md) — complete script reference, architecture design, component data flow, and development conventions.
+> For contributor guidance, see [CONTRIBUTING.md](CONTRIBUTING.md) — script reference, branching/commit workflow, and development conventions.

@@ -20,10 +20,15 @@
     "build:server": "npm run build -w packages/server",
     "build:electron": "npm run build:agent && npm run build:server && npm run build -w packages/electron",
     "build:all": "npm run build:agent && npm run build:web && npm run build:server && npm run build:electron",
-    "pack:electron": "npm run build:web && npm run build:electron && npm run pack -w packages/electron",
-    "dist:electron": "npm run build:web && npm run build:electron && npm run dist -w packages/electron",
+    "pack:electron:win": "npm run build:web && npm run build:electron && npm run pack:win -w packages/electron",
+    "pack:electron:linux": "npm run build:web && npm run build:electron && npm run pack:linux -w packages/electron",
+    "dist:electron:win": "npm run build:web && npm run build:electron && npm run dist:win -w packages/electron",
+    "dist:electron:linux": "npm run build:web && npm run build:electron && npm run dist:linux -w packages/electron",
+    "pack:electron": "npm run pack:electron:win",
+    "dist:electron": "npm run dist:electron:win",
     "lint": "eslint packages/*/src --ext .ts,.tsx,.vue",
     "typecheck": "tsc -b",
+    "test": "npm test -w packages/agent",
     "cli": "npx tsx packages/agent/src/cli.ts",
     "mcp:cli": "npx tsx packages/agent/src/cli.ts"
   },
@@ -35,7 +40,8 @@
     "eslint": "^8.56.0",
     "naive-ui": "^2.44.1",
     "prettier": "^3.2.4",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@vicons/ionicons5": "^0.13.0",

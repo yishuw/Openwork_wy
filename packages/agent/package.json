@@ -15,7 +15,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:typecheck": "tsc -p tsconfig.test.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^20.19.41",

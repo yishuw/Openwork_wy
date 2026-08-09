@@ -5,14 +5,14 @@
   "description": "OpenWork web frontend - Vue 3 + Monaco Editor",
   "type": "module",
   "scripts": {
+    "predev": "npm --prefix ../.. run build:agent",
     "dev": "vite",
     "build": "vite build",
     "typecheck": "vue-tsc -b",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@imengyu/vue3-context-menu": "^1.5.4",
-    "@openwork/agent": "0.1.0",
+    "@openwork/agent": "*",
     "@vue-office/excel": "^1.7.14",
     "@vue-office/pptx": "^1.0.1",
     "docx-preview": "^0.3.7",
