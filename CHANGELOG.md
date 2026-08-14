@@ -6,6 +6,11 @@
 
 ### Added
 
+- 文档全面更新：产品定位从「AI 辅助代码编辑器」修正为「通用 AI 办公辅助工作台」（多格式文档查看 + AI 助手），README 系列（根 / agent / server / web / electron，中英双语）、`docs/architecture.drawio` 与各包 `package.json` 描述同步更新
+- 文档事实修正：认证中间件已挂载（`AUTH_TOKEN`）、LLM 调用基于 `openai` SDK、`/api/agent` 为 2 个端点、工作区级内容搜索已实现、agent 包 vitest 单测已存在、`ChatResult`/`AgentResult` 取代过时的 `AgentEditResult`、Electron 协议为 `openwork://` 等
+
+### Changed
+
 - 安全加固：`AUTH_TOKEN` 中间件挂载到 `/api/*`（设置环境变量后启用 Bearer 校验，本地未设置则放行；`packages/server/src/index.ts`）
 - agent bash 工具开关：`OPENWORK_ENABLE_BASH=0` 时不再注册 `bash` 工具（远程部署建议关闭；`AgentConfig.enableBash`）
 - 单测基建：vitest（`packages/agent/test/`，16 个用例：SessionMemory / createDefaultTools / maskApiKey），`npm test`

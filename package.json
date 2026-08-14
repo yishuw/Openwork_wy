@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "OpenWork - An AI-powered code editor with Monaco Editor, supporting both server and Electron deployment",
+  "description": "OpenWork - A general-purpose AI-powered office workbench (multi-format file viewing + AI assistant), supporting both server and Electron deployment",
   "workspaces": [
     "packages/agent",
     "packages/server",

@@ -65,7 +65,8 @@
 ## 风格约定
 
 - 文本保持中英双语：`packages/web/src/locales/zh.ts` / `en.ts`（vue-i18n）。
-- web 前端：新组件使用 naive-ui + `useNaiveTheme`；naive-ui 迁移进度见 `packages/web/NAIVE_UI_REFACTOR_PLAN.md`。
+- **产品定位统一口径**：OpenWork 是「通用 AI 办公辅助工作台」（多格式文档查看 + AI 助手），不是纯代码编辑器。文档与 UI 文案中避免使用「AI 辅助代码编辑器」这类收窄定位的表述；代码查看只是 8 种查看模式之一。
+- web 前端：新组件使用 naive-ui + `useNaiveTheme`；naive-ui 迁移进度见 `packages/web/NAIVE_UI_REFACTOR_PLAN.md`（历史文档，部分内容已被取代）。
 - 不添加与代码无关的注释；改动遵循所在文件既有风格。
 
 ## 测试

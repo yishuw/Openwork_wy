@@ -1,6 +1,6 @@
 # @openwork/server
 
-OpenWork 服务端 —— 基于 Express 的文件操作 API 与 AI Agent 端点。
+OpenWork 服务端 —— 基于 Express 的通用 AI 办公辅助后端，提供文件 / 工作区 / Agent / LLM / MCP 全套 REST·SSE API。
 
 ---
 
@@ -15,13 +15,13 @@ src/
 │   └── types.ts          # FileEntry 类型定义
 ├── routes/
 │   ├── files.ts          # /api/files/*    — 文件系统 CRUD（10 个端点）
-│   ├── agent.ts          # /api/agent/*    — Agent 对话、SSE 流式、编辑应用（3 个端点）
+│   ├── agent.ts          # /api/agent/*    — Agent 对话与 SSE 流式（2 个端点）
 │   ├── workspace.ts      # /api/workspace/* — 工作区管理、Agent 会话持久化（9 个端点）
 │   ├── llm.ts            # /api/llm/*      — LLM 提供商 CRUD + 测试（6 个端点）
 │   ├── mcp.ts            # /api/mcp/*      — MCP 服务器 CRUD + 测试/工具查询（6 个端点）
 │   └── config.ts         # /api/config/*   — JSON 配置文件读写（2 个端点）
 ├── middleware/
-│   ├── auth.ts           # Bearer Token 鉴权中间件（未挂载，需手动引入）
+│   ├── auth.ts           # Bearer Token 鉴权中间件（已挂载于 /api/*，设置 AUTH_TOKEN 即启用）
 │   └── requestLogger.ts  # HTTP 请求日志中间件
 └── workspace/
     └── manager.ts        # WorkspaceManager — 工作区生命周期、AgentRuntime 缓存、会话持久化
@@ -77,7 +77,7 @@ npm run dev:all      # server + web 同时启动
 | `PORT` | — | 最高 | 服务端口 |
 | `SERVER_PORT` | — | 次高（fallback） | 服务端口 |
 | `SERVE_STATIC` | — | — | 静态文件目录路径 |
-| `AUTH_TOKEN` | — | — | Bearer Token（需手动挂载 auth.ts 中间件才生效） |
+| `AUTH_TOKEN` | — | — | Bearer Token（已挂载于 `/api/*`；设置后启用校验，本地未设置则放行，远程部署必须设置） |
 
 ---
 
@@ -235,14 +235,14 @@ interface AgentContext {
 }
 ```
 
-### AgentEditResult
+### ChatResult
 
 ```typescript
-interface AgentEditResult {
-  path: string;        // 文件路径
-  operation: 'create' | 'modify' | 'delete'; // 操作类型
-  content?: string;    // create/modify 操作的文件内容
-  original?: string;   // modify 操作的原始内容
+interface ChatResult {
+  content: string;   // 对话回复文本
+  turns: number;     // 工具循环轮数
+  toolCalls: { type: string; params: Record<string, string> }[]; // 工具调用记录
+  thinking?: string; // 本次会话产生的 thinking 内容（若有）
 }
 ```
 
@@ -596,10 +596,10 @@ SSE 流式 Agent 对话。这是**核心端点**，支持多轮 Agent 循环（`
 |----------|----------|------|
 | `chunk` | `{ chunk: string }` | LLM 输出的文本片段 |
 | `thinking` | `{ thinking: string }` | Agent 思考/推理内容 |
-| `tool_start` | `{ tool_start: string }` | 工具调用开始，格式：`🔍 tool_name: description` |
-| `tool_end` | `{ tool_end: string }` | 工具调用完成，格式：`tool_name complete` |
+| `tool_start` | `{ tool_start: { toolType, toolLabel, toolParams } }` | 工具调用开始，携带工具名、展示标签与参数 |
+| `tool_end` | `{ tool_end: { toolType, durationMs } }` | 工具调用完成，携带工具名与耗时（ms） |
 | `tool_result` | `{ tool_result: { name: string, content: string } }` | 工具执行结果 |
-| `done` | `{ done: true, edits: AgentEditResult[], toolCalls: number }` | 流结束，包含编辑结果和工具调用次数 |
+| `done` | `{ done: true, toolCalls: number }` | 流结束，包含工具调用次数 |
 | `error` | `{ error: string }` | 错误信息 |
 
 **心跳保活**：服务端每 15 秒发送 SSE 注释 `: heartbeat` 防止代理超时断开。
@@ -609,9 +609,9 @@ SSE 流式 Agent 对话。这是**核心端点**，支持多轮 Agent 循环（`
 ```
 data: {"thinking":"用户想创建一个 Express 服务器..."}
 
-data: {"tool_start":"🔍 read_file: package.json"}
+data: {"tool_start":{"toolType":"read_file","toolLabel":"read_file: package.json","toolParams":{"path":"package.json"}}}
 
-data: {"tool_end":"read_file complete"}
+data: {"tool_end":{"toolType":"read_file","durationMs":3}}
 
 data: {"tool_result":{"name":"read_file","content":"{\n  \"name\": \"my-project\"\n}"}}
 
@@ -621,7 +621,7 @@ data: {"chunk":"，我来帮你"}
 
 data: {"chunk":"创建 Express 服务器。"}
 
-data: {"done":true,"edits":[],"toolCalls":1}
+data: {"done":true,"toolCalls":1}
 ```
 
 ---
@@ -1284,21 +1284,23 @@ Linux/macOS 下返回 `[{ "name": "/", "path": "/", "isDirectory": true }]`。
 ```
 : heartbeat                          ← 闲置 15s 后发送的保活注释
 
-data: {"tool_start":"🔍 MCP: 1 server(s), 3 tool(s)}\n\n
+data: {"tool_start":{"toolType":"mcp","toolLabel":"MCP: 1 server(s), 3 tool(s)","toolParams":{}}}
 
-data: {"thinking":"分析用户需求..."}\n\n
+data: {"thinking":"分析用户需求..."}
 
-data: {"tool_start":"🔍 read_file: src/index.ts"}\n\n
+data: {"tool_start":{"toolType":"read_file","toolLabel":"read_file: src/index.ts","toolParams":{"path":"src/index.ts"}}}
 
-data: {"tool_end":"read_file complete"}\n\n
+data: {"tool_end":{"toolType":"read_file","durationMs":4}}
 
-data: {"tool_result":{"name":"read_file","content":"import express..."}}\n\n
+data: {"tool_result":{"name":"read_file","content":"import express..."}}
 
-data: {"chunk":"根据"}\n\n
-data: {"chunk":"你的"}\n\n
-data: {"chunk":"代码，"}\n\n
+data: {"chunk":"根据"}
 
-data: {"done":true,"edits":[{"path":"src/app.ts","operation":"create","content":"..."}],"toolCalls":1}\n\n
+data: {"chunk":"你的"}
+
+data: {"chunk":"代码，"}
+
+data: {"done":true,"toolCalls":1}
 ```
 
 ### 客户端接入示例
@@ -1344,7 +1346,7 @@ while (true) {
 | `tool_start` | 在工具调用面板显示进度 |
 | `tool_end` | 标记工具调用完成 |
 | `tool_result` | 显示工具返回结果 |
-| `done` | 流结束，`edits` 数组包含可应用的编辑建议；`toolCalls` 为工具调用总次数 |
+| `done` | 流结束，`toolCalls` 为工具调用总次数 |
 | `error` | 显示错误信息，之后会跟随 `done` 事件 |
 | `: heartbeat` | 忽略（SSE 注释） |
 
@@ -1376,8 +1378,7 @@ while (true) {
 ### 认证中间件
 
 - `middleware/auth.ts` 实现了 Bearer Token 验证
-- **未引入 `index.ts`**，设置 `AUTH_TOKEN` 环境变量不会生效
-- 如需启用，在 `createApp()` 中手动挂载
+- **已挂载于 `index.ts` 的 `/api/*`** —— 设置 `AUTH_TOKEN` 即启用校验，未带 token 的请求会被拒绝；本地未设置则放行，远程部署必须设置
 
 ---
 

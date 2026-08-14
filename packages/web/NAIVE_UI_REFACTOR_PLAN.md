@@ -1,5 +1,7 @@
 # Naive UI 重构方案
 
+> ⚠️ **历史文档**：本方案写于 naive-ui 迁移早期，文中提到的部分组件（如 `AgentPanel.vue`、旧文件树 `FileTree.vue`/`TreeNode.vue`、`SettingsDialog.vue`）已被移除或替换（现为 `AgentChatB.vue`、`NewFileTree`、`SettingsModal`）。仅供了解迁移思路，实际以代码为准。
+
 ## 当前状态概述
 
 - 30 个 Vue 组件，全部为纯手写 HTML + scoped CSS，无任何第三方 UI 库

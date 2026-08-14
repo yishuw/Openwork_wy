@@ -2,7 +2,7 @@
 
 > [English](README_EN.md)
 
-OpenWork 的 Electron 桌面壳 —— 加载 `@openwork/web` 前端，并通过 IPC 桥接或内嵌服务端提供本地文件系统能力。
+OpenWork 的 Electron 桌面壳 —— 加载 `@openwork/web` 前端（通用 AI 办公辅助工作台界面），并通过 IPC 桥接或内嵌服务端提供本地文件系统能力。
 
 > npm 包名为 `openwork-desktop`（非 `@openwork/electron`）。
 
@@ -20,7 +20,7 @@ OpenWork 的 Electron 桌面壳 —— 加载 `@openwork/web` 前端，并通过
 ```
 src/
 ├── main.ts             # 标准入口：BrowserWindow、原生菜单、openwork:// 协议、多窗口、IPC 文件操作
-├── main-server.ts      # 内嵌服务器入口：startServer + 单实例锁 + config:read/write + __VIBE_SERVER_PORT__
+├── main-server.ts      # 内嵌服务器入口：startServer + 单实例锁 + config:read/write + __OPENWORK_SERVER_PORT__
 ├── preload.ts          # Context Bridge，暴露 window.electronAPI
 └── ipc/file-handler.ts # file:* / dialog:* IPC 处理器（按窗口维护工作区根目录）
 build.mjs               # esbuild 打包（tsc 之后执行）

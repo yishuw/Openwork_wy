@@ -7,247 +7,236 @@
     <mxCell id="title" value="OpenWork 项目架构总览" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=22;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
       <mxGeometry x="220" y="10" width="400" height="35" as="geometry"/>
     </mxCell>
+    <mxCell id="subtitle" value="通用 AI 办公辅助工作台 · 多格式文档查看 + AI 助手（LLM 多提供商 + MCP 工具生态）" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#888888;" vertex="1" parent="1">
+      <mxGeometry x="200" y="42" width="440" height="16" as="geometry"/>
+    </mxCell>
 
     <!-- ===== SECTION 1: 包依赖关系 ===== -->
     <mxCell id="sec1-label" value="包依赖关系图" style="text;html=1;strokeColor=none;fillColor=#eeeeee;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=13;fontStyle=1;fontColor=#555555;" vertex="1" parent="1">
-      <mxGeometry x="30" y="55" width="150" height="24" as="geometry"/>
+      <mxGeometry x="30" y="75" width="150" height="24" as="geometry"/>
     </mxCell>
 
     <!-- Agent package -->
     <mxCell id="pkg-agent" value="@openwork/agent&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;AI Agent 框架（独立包，零工作区依赖）&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
-      <mxGeometry x="60" y="95" width="220" height="65" as="geometry"/>
+      <mxGeometry x="60" y="115" width="220" height="65" as="geometry"/>
     </mxCell>
-    <mxCell id="pkg-agent-detail" value="AgentRuntime · Agent · Session · 5个工具 · Parser · Executor · MCP · LLM · CLI" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=9;fontColor=#666666;" vertex="1" parent="1">
-      <mxGeometry x="65" y="130" width="210" height="20" as="geometry"/>
-    </mxCell>
-
-    <!-- Core package -->
-    <mxCell id="pkg-core" value="@openwork/core&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;共享类型 &amp; 文件系统抽象层&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
-      <mxGeometry x="400" y="95" width="220" height="65" as="geometry"/>
-    </mxCell>
-    <mxCell id="pkg-core-detail" value="IFileSystem · EditorState · 3种FS实现 · 类型定义" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=9;fontColor=#666666;" vertex="1" parent="1">
-      <mxGeometry x="405" y="130" width="210" height="20" as="geometry"/>
+    <mxCell id="pkg-agent-detail" value="AgentRuntime · Agent · Session · 7个工具 · ToolRegistry · MCP · LLM · SessionMemory · CLI" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=9;fontColor=#666666;" vertex="1" parent="1">
+      <mxGeometry x="65" y="150" width="210" height="20" as="geometry"/>
     </mxCell>
 
     <!-- Server package -->
-    <mxCell id="pkg-server" value="@openwork/server&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Express REST API 后端&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
-      <mxGeometry x="60" y="215" width="220" height="65" as="geometry"/>
+    <mxCell id="pkg-server" value="@openwork/server&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Express REST·SSE 后端&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+      <mxGeometry x="400" y="115" width="220" height="65" as="geometry"/>
     </mxCell>
-    <mxCell id="pkg-server-detail" value="文件CRUD · Agent SSE流 · 配置API · MCP测试" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=9;fontColor=#666666;" vertex="1" parent="1">
-      <mxGeometry x="65" y="250" width="210" height="20" as="geometry"/>
+    <mxCell id="pkg-server-detail" value="文件CRUD · Agent SSE流 · 工作区/会话持久化 · LLM · MCP · 配置API" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=9;fontColor=#666666;" vertex="1" parent="1">
+      <mxGeometry x="405" y="150" width="210" height="20" as="geometry"/>
     </mxCell>
 
     <!-- Web package -->
     <mxCell id="pkg-web" value="@openwork/web&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Vue 3 + Monaco Editor 前端&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
-      <mxGeometry x="370" y="215" width="230" height="65" as="geometry"/>
+      <mxGeometry x="60" y="235" width="220" height="65" as="geometry"/>
     </mxCell>
-    <mxCell id="pkg-web-detail" value="组件树 · Pinia状态管理 · Composables · Services" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=9;fontColor=#666666;" vertex="1" parent="1">
-      <mxGeometry x="375" y="250" width="220" height="20" as="geometry"/>
+    <mxCell id="pkg-web-detail" value="8种查看器 · 文件树 · Agent面板 · Pinia · Composables · Services" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=9;fontColor=#666666;" vertex="1" parent="1">
+      <mxGeometry x="65" y="270" width="210" height="20" as="geometry"/>
     </mxCell>
 
     <!-- Electron package -->
     <mxCell id="pkg-electron" value="openwork-desktop&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Electron 桌面端外壳&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=8;fontColor=#333333;" vertex="1" parent="1">
-      <mxGeometry x="660" y="215" width="170" height="65" as="geometry"/>
+      <mxGeometry x="660" y="235" width="170" height="65" as="geometry"/>
     </mxCell>
     <mxCell id="pkg-electron-detail" value="内嵌Server · IPC通信 · 菜单栏 · electronAPI" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=9;fontColor=#666666;" vertex="1" parent="1">
-      <mxGeometry x="665" y="250" width="160" height="20" as="geometry"/>
+      <mxGeometry x="665" y="270" width="160" height="20" as="geometry"/>
     </mxCell>
 
     <!-- Dependency arrows -->
     <mxCell id="edge-server-agent" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;strokeWidth=1.5;dashed=1;endArrow=open;endFill=0;" edge="1" parent="1" source="pkg-server" target="pkg-agent">
       <mxGeometry relative="1" as="geometry"/>
     </mxCell>
-    <mxCell id="edge-server-core" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;strokeWidth=1.5;dashed=1;endArrow=open;endFill=0;" edge="1" parent="1" source="pkg-server" target="pkg-core">
-      <mxGeometry relative="1" as="geometry"/>
-    </mxCell>
     <mxCell id="edge-web-agent" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;strokeWidth=1.5;dashed=1;endArrow=open;endFill=0;" edge="1" parent="1" source="pkg-web" target="pkg-agent">
-      <mxGeometry relative="1" as="geometry"/>
-    </mxCell>
-    <mxCell id="edge-web-core" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;strokeWidth=1.5;dashed=1;endArrow=open;endFill=0;" edge="1" parent="1" source="pkg-web" target="pkg-core">
       <mxGeometry relative="1" as="geometry"/>
     </mxCell>
     <mxCell id="edge-electron-server" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6b656;strokeWidth=1.5;dashed=1;endArrow=open;endFill=0;" edge="1" parent="1" source="pkg-electron" target="pkg-server">
       <mxGeometry relative="1" as="geometry">
         <Array as="points">
-          <mxPoint x="745" y="200"/>
-          <mxPoint x="170" y="200"/>
+          <mxPoint x="745" y="220"/>
+          <mxPoint x="510" y="220"/>
         </Array>
       </mxGeometry>
     </mxCell>
 
     <!-- Legend -->
     <mxCell id="legend" value="&lt;b&gt;依赖关系&lt;/b&gt; - - -&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#999999;" vertex="1" parent="1">
-      <mxGeometry x="640" y="95" width="90" height="16" as="geometry"/>
+      <mxGeometry x="640" y="115" width="90" height="16" as="geometry"/>
     </mxCell>
 
     <!-- ===== SECTION 2: 详细架构 ===== -->
     <mxCell id="sec2-label" value="详细架构" style="text;html=1;strokeColor=none;fillColor=#eeeeee;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=13;fontStyle=1;fontColor=#555555;" vertex="1" parent="1">
-      <mxGeometry x="30" y="300" width="100" height="24" as="geometry"/>
+      <mxGeometry x="30" y="320" width="100" height="24" as="geometry"/>
     </mxCell>
 
     <!-- ===== COLUMN 1: 前端 ===== -->
     <mxCell id="col1-header" value="Vue 3 前端 (@openwork/web)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#9673a6;strokeColor=#9673a6;fontSize=12;fontStyle=1;fontColor=#ffffff;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="30" y="335" width="250" height="28" as="geometry"/>
+      <mxGeometry x="30" y="355" width="250" height="28" as="geometry"/>
     </mxCell>
 
     <!-- 组件树 -->
     <mxCell id="comp-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3ebf7;strokeColor=#9673a6;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="30" y="370" width="250" height="130" as="geometry"/>
+      <mxGeometry x="30" y="390" width="250" height="130" as="geometry"/>
     </mxCell>
     <mxCell id="comp-title" value="组件树 (Component Tree)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#9673a6;" vertex="1" parent="1">
-      <mxGeometry x="38" y="373" width="160" height="18" as="geometry"/>
+      <mxGeometry x="38" y="393" width="160" height="18" as="geometry"/>
     </mxCell>
-    <mxCell id="comp-content" value="App.vue → MainLayout.vue（根布局）&lt;br&gt;&lt;br&gt;├─ Toolbar.vue（顶部工具栏）&lt;br&gt;├─ ActivityBar.vue（左侧图标栏）&lt;br&gt;├─ SideBar.vue → FileTree.vue → TreeNode.vue&lt;br&gt;├─ MonacoEditor.vue（代码编辑器）&lt;br&gt;├─ ImageViewer / DocxViewer / ExcelViewer&lt;br&gt;│   PptxViewer / PdfViewer / HtmlViewer / MarkdownViewer&lt;br&gt;├─ RightToolbar.vue（右侧图标栏）&lt;br&gt;├─ AgentPanel.vue → ModeSelector · ProviderSelect&lt;br&gt;├─ McpSettingsPanel.vue → McpServerItem&lt;br&gt;└─ StatusBar.vue（底部状态栏）" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="34" y="393" width="242" height="103" as="geometry"/>
+    <mxCell id="comp-content" value="App.vue → MainLayout.vue（根布局）&lt;br&gt;&lt;br&gt;├─ Toolbar.vue（顶部工具栏）&lt;br&gt;├─ SideBar.vue → NewFileTree.vue（文件树）&lt;br&gt;├─ MonacoEditor.vue（代码查看器）&lt;br&gt;├─ DocxViewer / ExcelViewer / PptxViewer / PdfViewer&lt;br&gt;│   MarkdownViewer / HtmlViewer / ImageViewer&lt;br&gt;├─ RightToolbar.vue（右侧工具栏）&lt;br&gt;├─ AgentChatB.vue → ModeSelector · ProviderSelect&lt;br&gt;├─ McpSettingsPanel.vue → McpServerItem&lt;br&gt;└─ StatusBar.vue（底部状态栏）" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
+      <mxGeometry x="34" y="413" width="242" height="103" as="geometry"/>
     </mxCell>
 
     <!-- 状态管理 -->
     <mxCell id="store-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3ebf7;strokeColor=#9673a6;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="30" y="510" width="118" height="85" as="geometry"/>
+      <mxGeometry x="30" y="530" width="118" height="85" as="geometry"/>
     </mxCell>
     <mxCell id="store-title" value="Pinia 状态管理" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#9673a6;" vertex="1" parent="1">
-      <mxGeometry x="38" y="513" width="100" height="18" as="geometry"/>
+      <mxGeometry x="38" y="533" width="100" height="18" as="geometry"/>
     </mxCell>
-    <mxCell id="store-content" value="editor — 标签页、文件树&lt;br&gt;sessions — 聊天历史&lt;br&gt;settings — 语言、主题" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="34" y="533" width="110" height="56" as="geometry"/>
+    <mxCell id="store-content" value="editor — 标签页、文件树、工作区&lt;br&gt;sessions — 会话历史&lt;br&gt;settings — 语言、主题" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
+      <mxGeometry x="34" y="553" width="110" height="56" as="geometry"/>
     </mxCell>
 
     <!-- 组合式函数 -->
     <mxCell id="compb-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3ebf7;strokeColor=#9673a6;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="158" y="510" width="122" height="85" as="geometry"/>
+      <mxGeometry x="158" y="530" width="122" height="85" as="geometry"/>
     </mxCell>
     <mxCell id="compb-title" value="Composables" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#9673a6;" vertex="1" parent="1">
-      <mxGeometry x="166" y="513" width="100" height="18" as="geometry"/>
+      <mxGeometry x="166" y="533" width="100" height="18" as="geometry"/>
     </mxCell>
-    <mxCell id="compb-content" value="useAgent（AI交互）&lt;br&gt;useFileSystem（文件操作）&lt;br&gt;useEditor（编辑器控制）&lt;br&gt;useProviderSettings&lt;br&gt;useMcpSettings" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="162" y="533" width="114" height="56" as="geometry"/>
+    <mxCell id="compb-content" value="useAgent（AI交互）&lt;br&gt;useFileSystem（文件操作）&lt;br&gt;useEditor（查看器控制）&lt;br&gt;useProviderSettings&lt;br&gt;useMcpSettings" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
+      <mxGeometry x="162" y="553" width="114" height="56" as="geometry"/>
     </mxCell>
 
     <!-- 服务层 -->
     <mxCell id="svc-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3ebf7;strokeColor=#9673a6;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="30" y="605" width="250" height="85" as="geometry"/>
+      <mxGeometry x="30" y="625" width="250" height="85" as="geometry"/>
     </mxCell>
     <mxCell id="svc-title" value="服务层 (Services)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#9673a6;" vertex="1" parent="1">
-      <mxGeometry x="38" y="608" width="120" height="18" as="geometry"/>
+      <mxGeometry x="38" y="628" width="120" height="18" as="geometry"/>
     </mxCell>
-    <mxCell id="svc-content" value="agentService — SSE客户端 (/api/agent/stream)&lt;br&gt;fileService — 3种环境客户端 (Electron IPC / REST / 浏览器FSA)&lt;br&gt;configService — 多级回退 (IPC → REST → localStorage)&lt;br&gt;mcpService — MCP连接测试&lt;br&gt;editParser — &lt;edit&gt; 块解析提取" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="34" y="627" width="242" height="58" as="geometry"/>
+    <mxCell id="svc-content" value="agentService — SSE客户端 (/api/agent/stream)&lt;br&gt;fileService — 3种环境客户端 (Electron IPC / REST / 浏览器FSA)&lt;br&gt;configService — 多级回退 (IPC → REST → localStorage)&lt;br&gt;llmService — LLM提供商 REST 客户端&lt;br&gt;mcpService — MCP服务器 REST 客户端" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
+      <mxGeometry x="34" y="647" width="242" height="58" as="geometry"/>
     </mxCell>
 
     <!-- ===== COLUMN 2: AGENT 框架 ===== -->
     <mxCell id="col2-header" value="Agent 框架 (@openwork/agent)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#82b366;strokeColor=#82b366;fontSize=12;fontStyle=1;fontColor=#ffffff;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="300" y="335" width="250" height="28" as="geometry"/>
+      <mxGeometry x="300" y="355" width="250" height="28" as="geometry"/>
     </mxCell>
 
     <!-- Agent 循环引擎 -->
     <mxCell id="loop-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e0;strokeColor=#82b366;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="300" y="370" width="250" height="95" as="geometry"/>
+      <mxGeometry x="300" y="390" width="250" height="95" as="geometry"/>
     </mxCell>
     <mxCell id="loop-title" value="Agent 循环引擎 (核心)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#82b366;" vertex="1" parent="1">
-      <mxGeometry x="308" y="373" width="150" height="18" as="geometry"/>
+      <mxGeometry x="308" y="393" width="150" height="18" as="geometry"/>
     </mxCell>
-    <mxCell id="loop-content" value="Agent.executeStream() — 多轮工具调用循环（最多15轮）&lt;br&gt;1. 构建系统提示词 + 工具描述 + 上下文 + 历史记录&lt;br&gt;2. 调用大模型 (Provider.chatStream)&lt;br&gt;3. 解析响应 → 有工具调用？执行并循环 : 输出并结束&lt;br&gt;4. Session 包裹 Agent + 子代理委托&lt;br&gt;&lt;br&gt;事件流: chunk · thinking · tool_start · tool_end · done · error" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="304" y="393" width="242" height="67" as="geometry"/>
+    <mxCell id="loop-content" value="AgentRuntime.chatStream() — 多轮工具调用循环（build 默认最多20轮）&lt;br&gt;1. 构建系统提示词 + 工具描述 + 上下文 (IDESnapshot) + 会话历史&lt;br&gt;2. 调用大模型 (openai SDK, Provider.chatStream)&lt;br&gt;3. 解析工具调用 → 执行工具 → 反馈结果 → 循环&lt;br&gt;4. Session 编排主 Agent + &lt;delegate&gt; 子代理委派&lt;br&gt;&lt;br&gt;事件流: chunk · thinking · tool_start · tool_end · tool_result · done · error" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
+      <mxGeometry x="304" y="413" width="242" height="67" as="geometry"/>
     </mxCell>
 
     <!-- 内置工具 -->
     <mxCell id="tools-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e0;strokeColor=#82b366;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="300" y="475" width="250" height="85" as="geometry"/>
+      <mxGeometry x="300" y="495" width="250" height="100" as="geometry"/>
     </mxCell>
-    <mxCell id="tools-title" value="内置工具 (ToolRegistry)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#82b366;" vertex="1" parent="1">
-      <mxGeometry x="308" y="478" width="170" height="18" as="geometry"/>
+    <mxCell id="tools-title" value="内置工具 (ToolRegistry · 7个)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#82b366;" vertex="1" parent="1">
+      <mxGeometry x="308" y="498" width="170" height="18" as="geometry"/>
     </mxCell>
-    <mxCell id="tools-content" value="read_file — 通过 IAgentFileSystem 读取文件&lt;br&gt;list_dir — 列出目录内容（目录优先排序）&lt;br&gt;search_code — 正则搜索文件树（跳过node_modules等）&lt;br&gt;bash — 执行Shell命令（2分钟超时，10MB上限）&lt;br&gt;delegate — 子代理任务委托" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="304" y="498" width="242" height="57" as="geometry"/>
+    <mxCell id="tools-content" value="file_edit — 修改现有文件（diff语义，需先read_file）&lt;br&gt;file_write — 新建 / 整文件重写&lt;br&gt;read_file — 通过 IAgentFileSystem 读取文件&lt;br&gt;list_dir — 列出目录内容&lt;br&gt;search_code — 正则搜索文件内容（跳过node_modules等）&lt;br&gt;bash — 执行Shell命令（OPENWORK_ENABLE_BASH 可关闭）&lt;br&gt;delegate — 子代理任务委托" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
+      <mxGeometry x="304" y="518" width="242" height="72" as="geometry"/>
     </mxCell>
 
     <!-- LLM Provider -->
     <mxCell id="prov-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e0;strokeColor=#82b366;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="300" y="570" width="118" height="60" as="geometry"/>
+      <mxGeometry x="300" y="605" width="118" height="70" as="geometry"/>
     </mxCell>
-    <mxCell id="prov-title" value="大模型供应层" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#82b366;" vertex="1" parent="1">
-      <mxGeometry x="308" y="573" width="100" height="18" as="geometry"/>
+    <mxCell id="prov-title" value="LLM 提供商层" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#82b366;" vertex="1" parent="1">
+      <mxGeometry x="308" y="608" width="100" height="18" as="geometry"/>
     </mxCell>
-    <mxCell id="prov-content" value="OpenAI 兼容 SDK&lt;br&gt;chat() + chatStream()&lt;br&gt;支持 thinking 推理" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="304" y="593" width="110" height="32" as="geometry"/>
+    <mxCell id="prov-content" value="openai SDK（OpenAI兼容）&lt;br&gt;chat() + chatStream()&lt;br&gt;LLMGateway 多提供商管理&lt;br&gt;支持 thinking 推理" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
+      <mxGeometry x="304" y="628" width="110" height="42" as="geometry"/>
     </mxCell>
 
-    <!-- 解析器 + 执行器 -->
+    <!-- 记忆 + 解析 -->
     <mxCell id="parser-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e0;strokeColor=#82b366;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="428" y="570" width="122" height="60" as="geometry"/>
+      <mxGeometry x="428" y="605" width="122" height="70" as="geometry"/>
     </mxCell>
-    <mxCell id="parser-title" value="解析器 &amp; 执行器" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#82b366;" vertex="1" parent="1">
-      <mxGeometry x="436" y="573" width="110" height="18" as="geometry"/>
+    <mxCell id="parser-title" value="记忆 &amp; 解析" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#82b366;" vertex="1" parent="1">
+      <mxGeometry x="436" y="608" width="110" height="18" as="geometry"/>
     </mxCell>
-    <mxCell id="parser-content" value="parseToolCalls（XML解析）&lt;br&gt;parseEditsFromText&lt;br&gt;executeEdits / revertEdits" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="432" y="593" width="114" height="32" as="geometry"/>
+    <mxCell id="parser-content" value="SessionMemory（Token预算）&lt;br&gt;parseToolCalls（XML解析）&lt;br&gt;IDESnapshot 上下文快照" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
+      <mxGeometry x="432" y="628" width="114" height="42" as="geometry"/>
     </mxCell>
 
     <!-- MCP -->
     <mxCell id="mcp-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e0;strokeColor=#82b366;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="300" y="640" width="250" height="55" as="geometry"/>
+      <mxGeometry x="300" y="685" width="250" height="55" as="geometry"/>
     </mxCell>
     <mxCell id="mcp-title" value="MCP（模型上下文协议）" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#82b366;" vertex="1" parent="1">
-      <mxGeometry x="308" y="643" width="180" height="18" as="geometry"/>
+      <mxGeometry x="308" y="688" width="180" height="18" as="geometry"/>
     </mxCell>
-    <mxCell id="mcp-content" value="McpManager — 多服务器连接 → 收集工具 → ToolAdapter → ITool&lt;br&gt;传输方式: Stdio · SSE · StreamableHTTP" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="304" y="663" width="242" height="27" as="geometry"/>
+    <mxCell id="mcp-content" value="McpManager — 多服务器连接 → 工具发现 → ToolAdapter → ITool&lt;br&gt;传输方式: Stdio · SSE · HTTP" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
+      <mxGeometry x="304" y="708" width="242" height="27" as="geometry"/>
     </mxCell>
 
     <!-- ===== COLUMN 3: 后端 ===== -->
     <mxCell id="col3-header" value="Express 后端 (@openwork/server)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d6b656;strokeColor=#d6b656;fontSize=12;fontStyle=1;fontColor=#ffffff;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="570" y="335" width="250" height="28" as="geometry"/>
+      <mxGeometry x="570" y="355" width="250" height="28" as="geometry"/>
     </mxCell>
 
     <!-- 路由 -->
     <mxCell id="routes-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9e6;strokeColor=#d6b656;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="570" y="370" width="250" height="210" as="geometry"/>
+      <mxGeometry x="570" y="390" width="250" height="250" as="geometry"/>
     </mxCell>
     <mxCell id="routes-title" value="API 路由" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#d6b656;" vertex="1" parent="1">
-      <mxGeometry x="578" y="373" width="80" height="18" as="geometry"/>
+      <mxGeometry x="578" y="393" width="80" height="18" as="geometry"/>
     </mxCell>
-    <mxCell id="routes-content" value="GET  /api/health（健康检查）&lt;br&gt;&lt;hr size=&quot;1&quot;&gt;&lt;b&gt;文件 CRUD&lt;/b&gt;&lt;br&gt;GET  /api/files/list · read · exists · stat&lt;br&gt;GET  /api/files/read-buffer（二进制）&lt;br&gt;POST /api/files/write · mkdir · rename&lt;br&gt;DELETE /api/files/delete · rmdir&lt;br&gt;&lt;hr size=&quot;1&quot;&gt;&lt;b&gt;Agent&lt;/b&gt;&lt;br&gt;POST /api/agent/chat（单次对话）&lt;br&gt;POST /api/agent/stream（SSE流 + 工具循环）&lt;br&gt;POST /api/agent/apply-edits（应用编辑）&lt;br&gt;&lt;hr size=&quot;1&quot;&gt;&lt;b&gt;配置&lt;/b&gt;&lt;br&gt;GET/PUT /api/config/:filename&lt;br&gt;&lt;hr size=&quot;1&quot;&gt;&lt;b&gt;MCP&lt;/b&gt;&lt;br&gt;POST /api/mcp/test（测试连接）" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="574" y="393" width="242" height="183" as="geometry"/>
+    <mxCell id="routes-content" value="GET  /api/health（健康检查）&lt;br&gt;&lt;hr size=&quot;1&quot;&gt;&lt;b&gt;文件 CRUD&lt;/b&gt;&lt;br&gt;GET  /api/files/list · read · exists · stat&lt;br&gt;GET  /api/files/read-buffer（二进制）&lt;br&gt;POST /api/files/write · mkdir · rename&lt;br&gt;DELETE /api/files/delete · rmdir&lt;br&gt;&lt;hr size=&quot;1&quot;&gt;&lt;b&gt;Agent&lt;/b&gt;&lt;br&gt;POST /api/agent/chat（单次对话）&lt;br&gt;POST /api/agent/stream（SSE流 + 工具循环）&lt;br&gt;&lt;hr size=&quot;1&quot;&gt;&lt;b&gt;工作区 &amp; 会话&lt;/b&gt;&lt;br&gt;/api/workspace/*（生命周期 + 会话持久化）&lt;br&gt;&lt;hr size=&quot;1&quot;&gt;&lt;b&gt;LLM / MCP / 配置&lt;/b&gt;&lt;br&gt;/api/llm/providers · /api/mcp/servers&lt;br&gt;GET/PUT /api/config/:filename" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
+      <mxGeometry x="574" y="413" width="242" height="223" as="geometry"/>
     </mxCell>
 
     <!-- 中间件与安全 -->
     <mxCell id="mw-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9e6;strokeColor=#d6b656;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="570" y="590" width="250" height="50" as="geometry"/>
+      <mxGeometry x="570" y="650" width="250" height="50" as="geometry"/>
     </mxCell>
     <mxCell id="mw-title" value="中间件 &amp; 安全" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#d6b656;" vertex="1" parent="1">
-      <mxGeometry x="578" y="593" width="150" height="18" as="geometry"/>
+      <mxGeometry x="578" y="653" width="150" height="18" as="geometry"/>
     </mxCell>
-    <mxCell id="mw-content" value="认证: Bearer Token（可选，目前已废弃）&lt;br&gt;路径安全: resolve → startsWith 校验，防止目录穿越" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="574" y="613" width="242" height="22" as="geometry"/>
+    <mxCell id="mw-content" value="认证: Bearer Token（已挂载 /api/*，设置 AUTH_TOKEN 即启用）&lt;br&gt;路径安全: resolve → startsWith 校验，防止目录穿越" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
+      <mxGeometry x="574" y="673" width="242" height="22" as="geometry"/>
     </mxCell>
 
     <!-- Electron 内嵌 -->
     <mxCell id="embed-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9e6;strokeColor=#d6b656;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="570" y="650" width="250" height="40" as="geometry"/>
+      <mxGeometry x="570" y="710" width="250" height="40" as="geometry"/>
     </mxCell>
     <mxCell id="embed-content" value="Electron 内嵌: startServer() 启动在端口 20385&lt;br&gt;注入 window.__OPENWORK_SERVER_PORT__ 到渲染进程" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=8;fontColor=#555555;spacingLeft=6;" vertex="1" parent="1">
-      <mxGeometry x="574" y="655" width="242" height="30" as="geometry"/>
+      <mxGeometry x="574" y="715" width="242" height="30" as="geometry"/>
     </mxCell>
 
     <!-- ===== SECTION 3: 文件系统层 ===== -->
     <mxCell id="sec3-label" value="文件系统抽象层" style="text;html=1;strokeColor=none;fillColor=#eeeeee;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=13;fontStyle=1;fontColor=#555555;" vertex="1" parent="1">
-      <mxGeometry x="30" y="715" width="140" height="24" as="geometry"/>
+      <mxGeometry x="30" y="775" width="140" height="24" as="geometry"/>
     </mxCell>
 
     <!-- IFileSystem 接口 -->
-    <mxCell id="fs-interface" value="&lt;&lt;接口&gt;&gt;&lt;br&gt;&lt;b&gt;IFileSystem&lt;/b&gt; (core 包)&lt;br&gt;readFile · writeFile · deleteFile · readDir&lt;br&gt;createDir · deleteDir · exists · stat&lt;br&gt;rename · watch · dispose" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;verticalAlign=middle;fontStyle=0;" vertex="1" parent="1">
-      <mxGeometry x="30" y="750" width="270" height="70" as="geometry"/>
+    <mxCell id="fs-interface" value="&lt;&lt;接口&gt;&gt;&lt;br&gt;&lt;b&gt;IFileSystem&lt;/b&gt; (server 包)&lt;br&gt;readFile · writeFile · deleteFile · readDir&lt;br&gt;createDir · deleteDir · exists · stat&lt;br&gt;rename · watch · dispose" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;verticalAlign=middle;fontStyle=0;" vertex="1" parent="1">
+      <mxGeometry x="30" y="810" width="270" height="70" as="geometry"/>
     </mxCell>
 
     <!-- 3种实现 -->
-    <mxCell id="fs-local" value="&lt;b&gt;LocalFileSystem（本地文件系统）&lt;/b&gt;&lt;br&gt;基于 Node.js fs/promises&lt;br&gt;支持 fs.watch 文件监听&lt;br&gt;用于: Server后端、Electron IPC、CLI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e0;strokeColor=#82b366;fontSize=9;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="30" y="840" width="195" height="60" as="geometry"/>
+    <mxCell id="fs-local" value="&lt;b&gt;LocalFileSystem（本地）&lt;/b&gt;&lt;br&gt;基于 Node.js fs/promises（server fs/）&lt;br&gt;支持 fs.watch 文件监听&lt;br&gt;用于: Server后端、Electron IPC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e0;strokeColor=#82b366;fontSize=9;verticalAlign=middle;" vertex="1" parent="1">
+      <mxGeometry x="30" y="900" width="195" height="60" as="geometry"/>
     </mxCell>
-    <mxCell id="fs-server" value="&lt;b&gt;ServerFileSystem（远程文件系统）&lt;/b&gt;&lt;br&gt;HTTP REST 代理模式&lt;br&gt;支持 Bearer Token 认证&lt;br&gt;用于: 浏览器→服务器通信" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="245" y="840" width="195" height="60" as="geometry"/>
+    <mxCell id="fs-server" value="&lt;b&gt;REST 客户端（远程）&lt;/b&gt;&lt;br&gt;HTTP /api/files/* 代理（web fileService）&lt;br&gt;配合 AUTH_TOKEN Bearer 校验&lt;br&gt;用于: 浏览器→服务器通信" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;verticalAlign=middle;" vertex="1" parent="1">
+      <mxGeometry x="245" y="900" width="195" height="60" as="geometry"/>
     </mxCell>
-    <mxCell id="fs-virtual" value="&lt;b&gt;VirtualFileSystem（虚拟文件系统）&lt;/b&gt;&lt;br&gt;纯内存 Map 树结构&lt;br&gt;自动创建中间目录&lt;br&gt;用于: 测试、沙箱环境" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3ebf7;strokeColor=#9673a6;fontSize=9;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="460" y="840" width="195" height="60" as="geometry"/>
+    <mxCell id="fs-virtual" value="&lt;b&gt;浏览器 FSA 客户端&lt;/b&gt;&lt;br&gt;File System Access API&lt;br&gt;2秒目录缓存&lt;br&gt;用于: 浏览器本地模式" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3ebf7;strokeColor=#9673a6;fontSize=9;verticalAlign=middle;" vertex="1" parent="1">
+      <mxGeometry x="460" y="900" width="195" height="60" as="geometry"/>
     </mxCell>
 
     <!-- 实现箭头 -->
@@ -263,7 +252,7 @@
 
     <!-- IAgentFileSystem -->
     <mxCell id="fs-agent" value="&lt;b&gt;IAgentFileSystem&lt;/b&gt; (agent 包)&lt;br&gt;最小化4方法契约（解耦接口）&lt;br&gt;readFile · writeFile · exists · readDir" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="330" y="755" width="230" height="55" as="geometry"/>
+      <mxGeometry x="330" y="815" width="230" height="55" as="geometry"/>
     </mxCell>
     <mxCell id="edge-fs-agent" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;strokeWidth=1;dashed=1;endArrow=open;endFill=0;" edge="1" parent="1" source="fs-agent" target="fs-interface">
       <mxGeometry relative="1" as="geometry"/>
@@ -271,32 +260,32 @@
 
     <!-- FileServiceClient -->
     <mxCell id="fs-client" value="&lt;b&gt;FileServiceClient&lt;/b&gt; (web 包)&lt;br&gt;detectEnvironment() 自动选择:&lt;br&gt;1. window.electronAPI → Electron IPC&lt;br&gt;2. showDirectoryPicker → 浏览器FSA&lt;br&gt;3. 回退 → Server REST API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="620" y="840" width="210" height="60" as="geometry"/>
+      <mxGeometry x="620" y="900" width="210" height="60" as="geometry"/>
     </mxCell>
 
     <!-- ===== SECTION 4: 数据流 ===== -->
     <mxCell id="sec4-label" value="Agent 请求流程（端到端）" style="text;html=1;strokeColor=none;fillColor=#eeeeee;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=13;fontStyle=1;fontColor=#555555;" vertex="1" parent="1">
-      <mxGeometry x="30" y="925" width="200" height="24" as="geometry"/>
+      <mxGeometry x="30" y="985" width="200" height="24" as="geometry"/>
     </mxCell>
 
     <!-- 流程步骤 -->
-    <mxCell id="flow-1" value="1. 用户在&lt;br&gt;AgentPanel输入" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;verticalAlign=middle;fontStyle=1;" vertex="1" parent="1">
-      <mxGeometry x="30" y="960" width="105" height="40" as="geometry"/>
+    <mxCell id="flow-1" value="1. 用户在&lt;br&gt;AgentChatB输入" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;verticalAlign=middle;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="30" y="1020" width="105" height="40" as="geometry"/>
     </mxCell>
-    <mxCell id="flow-2" value="2. useAgent()&lt;br&gt;构建AgentContext&lt;br&gt;(打开文件、光标、树)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3ebf7;strokeColor=#9673a6;fontSize=8;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="155" y="955" width="125" height="50" as="geometry"/>
+    <mxCell id="flow-2" value="2. useAgent()&lt;br&gt;构建 IDESnapshot&lt;br&gt;(打开文件、光标、树)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3ebf7;strokeColor=#9673a6;fontSize=8;verticalAlign=middle;" vertex="1" parent="1">
+      <mxGeometry x="155" y="1015" width="125" height="50" as="geometry"/>
     </mxCell>
     <mxCell id="flow-3" value="3. agentService&lt;br&gt;POST /api/agent/stream&lt;br&gt;(SSE 流式)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9e6;strokeColor=#d6b656;fontSize=8;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="300" y="955" width="120" height="50" as="geometry"/>
+      <mxGeometry x="300" y="1015" width="120" height="50" as="geometry"/>
     </mxCell>
-    <mxCell id="flow-4" value="4. Server 路由&lt;br&gt;创建 Agent +&lt;br&gt;LocalFileSystem" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=8;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="440" y="955" width="110" height="50" as="geometry"/>
+    <mxCell id="flow-4" value="4. Server 路由&lt;br&gt;复用 AgentRuntime +&lt;br&gt;LocalFileSystem" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=8;verticalAlign=middle;" vertex="1" parent="1">
+      <mxGeometry x="440" y="1015" width="110" height="50" as="geometry"/>
     </mxCell>
-    <mxCell id="flow-5" value="5. Agent多轮循环&lt;br&gt;工具调用执行&lt;br&gt;(最多15轮)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e0;strokeColor=#82b366;fontSize=8;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="570" y="955" width="110" height="50" as="geometry"/>
+    <mxCell id="flow-5" value="5. Agent多轮循环&lt;br&gt;工具调用执行&lt;br&gt;(build 默认最多20轮)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e0;strokeColor=#82b366;fontSize=8;verticalAlign=middle;" vertex="1" parent="1">
+      <mxGeometry x="570" y="1015" width="110" height="50" as="geometry"/>
     </mxCell>
     <mxCell id="flow-6" value="6. 大模型 API&lt;br&gt;OpenAI兼容接口&lt;br&gt;流式 + thinking" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=8;verticalAlign=middle;" vertex="1" parent="1">
-      <mxGeometry x="700" y="955" width="115" height="50" as="geometry"/>
+      <mxGeometry x="700" y="1015" width="115" height="50" as="geometry"/>
     </mxCell>
 
     <!-- 流程箭头 -->
@@ -317,13 +306,13 @@
     </mxCell>
 
     <!-- 返回流 -->
-    <mxCell id="flow-return" value="响应流返回: SSE事件 → parseEditsFromText 解析编辑块 → 应用到编辑器标签页" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontSize=9;verticalAlign=middle;fontColor=#555555;" vertex="1" parent="1">
-      <mxGeometry x="200" y="1025" width="400" height="24" as="geometry"/>
+    <mxCell id="flow-return" value="响应流返回: SSE事件（chunk / thinking / tool_*）→ 前端刷新标签页与文件树；编辑由 agent 工具直接落盘" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;fontSize=9;verticalAlign=middle;fontColor=#555555;" vertex="1" parent="1">
+      <mxGeometry x="200" y="1085" width="400" height="24" as="geometry"/>
     </mxCell>
 
     <!-- 关键设计说明 -->
-    <mxCell id="note" value="&lt;b&gt;关键设计决策:&lt;/b&gt;  • Agent 框架平台无关（通过 IAgentFileSystem 解耦）  • 三层文件系统: core IFileSystem → 3种实现 → web FileServiceClient  • SSE 流式 + 多轮工具调用循环  • MCP 协议实现可扩展工具生态  • 运行时环境自动检测（Electron / 浏览器 / 服务器）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontSize=9;verticalAlign=middle;fontColor=#555555;align=left;spacingLeft=8;" vertex="1" parent="1">
-      <mxGeometry x="30" y="1065" width="800" height="40" as="geometry"/>
+    <mxCell id="note" value="&lt;b&gt;关键设计决策:&lt;/b&gt;  • Agent 框架平台无关（通过 IAgentFileSystem 解耦，7 个通用工具 + MCP 生态）  • 文件系统: server IFileSystem/LocalFileSystem → web FileServiceClient（Electron IPC / REST / 浏览器 FSA）  • SSE 流式 + 多轮工具调用循环  • 工作区与 Agent 会话持久化（.openwork/workspace.json）  • 运行时环境自动检测（Electron / 浏览器 / 服务器）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;fontSize=9;verticalAlign=middle;fontColor=#555555;align=left;spacingLeft=8;" vertex="1" parent="1">
+      <mxGeometry x="30" y="1125" width="800" height="40" as="geometry"/>
     </mxCell>
 
   </root>

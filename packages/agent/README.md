@@ -2,7 +2,7 @@
 
 > [English](README_EN.md)
 
-OpenWork 独立 AI Agent 框架 —— 提供统一的 Agent 运行时、LLM 提供商管理、多轮工具调用循环、MCP 客户端与编辑执行能力。
+OpenWork 独立 AI Agent 框架 —— 提供统一的 Agent 运行时、LLM 提供商管理、多轮工具调用循环、MCP 客户端与文件操作/任务执行能力。它是 OpenWork 通用 AI 办公辅助工作台的核心：Agent 通过工具读写文件、执行命令、调用外部 MCP 工具，完成用户以自然语言下达的任务。
 
 ## 设计原则
 
@@ -26,13 +26,21 @@ src/
 ├── agent.ts            # Agent —— 单 Agent 多轮工具调用循环
 ├── session.ts          # Session —— 主/子 Agent 编排、<delegate> 委派、流式
 ├── tool-registry.ts    # ToolRegistry —— 工具注册、查找、系统提示生成
-├── tools/
-│   ├── index.ts        # createDefaultTools() —— 7 个默认工具
-│   ├── read-file.ts    # <read_file>   读取文件
-│   ├── list-dir.ts     # <list_dir>    列目录
-│   ├── search-code.ts  # <search_code> 搜索代码
-│   ├── bash.ts         # <bash>        执行 shell 命令
-│   └── delegate.ts     # <delegate>    委派子 Agent
+├── parser.ts           # parseToolCalls() —— 解析 LLM 回复中的工具调用（XML 块）
+├── openai-client.ts    # createOpenAILLMProvider() / buildMessages() / resolveLLMConfig()
+├── logger.ts           # createLogger() / runWithContext() —— 结构化日志
+├── log-categories.ts   # LOG_CATEGORY 日志分类常量
+├── cli.ts              # 交互式 CLI Agent（支持 MCP 工具）
+├── tools/              # 7 个默认工具（每个工具一个目录：实现 + prompt + 导出）
+│   ├── index.ts        # createDefaultTools() —— 默认工具集工厂
+│   ├── file-edit/      # FileEditTool —— 修改现有文件（diff 语义）
+│   ├── file-write/     # FileWriteTool —— 新建或整文件重写
+│   ├── file-read/      # FileReadTool —— 读取文件
+│   ├── list-dir/       # ListDirTool —— 列目录
+│   ├── search-code/    # SearchCodeTool —— 正则搜索文件内容
+│   ├── bash/           # BashTool —— 执行 shell 命令（可关闭）
+│   ├── delegate/       # DelegateTool —— 委派子 Agent
+│   └── _shared/path.ts # 工具间共享的路径工具函数
 ├── mcp/
 │   ├── manager.ts      # McpManager —— 多服务器生命周期、工具发现与路由
 │   ├── client.ts       # MCPClient  —— 单服务器连接（initialize/list/call）
@@ -43,11 +51,10 @@ src/
 ├── llm/
 │   ├── index.ts        # 重导出 LLMGateway 等
 │   └── gateway.ts      # LLMGateway —— LLM 提供商 CRUD + 持久化（llm-settings.json）
-├── openai-client.ts    # createOpenAILLMProvider() / buildMessages() / resolveLLMConfig()
-├── parser.ts           # parseToolCalls() —— 解析 LLM 回复中的工具调用（XML 块）
-├── logger.ts           # createLogger() / runWithContext() —— 结构化日志
-├── log-categories.ts   # LOG_CATEGORY 日志分类常量
-├── cli.ts              # 交互式 CLI Agent（支持 MCP 工具）
+├── memory/
+│   ├── SessionMemory.ts # SessionMemory —— 会话记忆（消息 / 工具调用记录 / Token 预算）
+│   ├── types.ts        # MemoryEntry / ToolCallRecord / IDESnapshot / DisplayMessage 等类型
+│   └── index.ts        # 重导出
 └── types/              # 类型定义（agent / message / filesystem / tool / provider）
 ```
 
@@ -57,14 +64,16 @@ src/
 |------|------|------|
 | `AgentRuntime` | `runtime.ts` | **统一入口**：封装 plan/build 模式、会话管理与 MCP |
 | `AgentRuntimeConfig` / `AgentRuntimeEvent` / `ChatResult` | `runtime.ts` | Runtime 配置与流式事件类型 |
-| `executeEdits` 已废弃 | — | 编辑能力已下沉为 `FileEditTool` / `FileWriteTool`，在工具循环内直接写入文件系统 |
 | `parseToolCalls` / `ParsedTool` | `parser.ts` | 从 LLM 回复中解析工具调用块 |
 | `LLMGateway` / `maskApiKey` / `LLMProvider` / `LLMSettings` | `llm/gateway.ts` | LLM 提供商配置管理（持久化） |
+| `createOpenAILLMProvider` / `buildMessages` / `resolveLLMConfig` | `openai-client.ts` | OpenAI 兼容 Provider 工厂与消息构建 |
 | `McpManager` / `McpToolInfo` | `mcp/manager.ts` | MCP 多服务器连接管理 |
 | MCP 配置类型 | `mcp/config.ts` | `McpServerConfig` / `McpConfig` / `McpServerEntry` 等 |
+| `SessionMemory` 及其类型 | `memory/` | 会话记忆：`MemoryEntry` / `ToolCallRecord` / `IDESnapshot` / `DisplayMessage` 系列 |
+| `CHARS_PER_TOKEN` / `DEFAULT_MEMORY_TOKEN_BUDGET` | `memory/` | Token 预算常量 |
 | `createLogger` / `runWithContext` / `Logger` | `logger.ts` | 结构化日志 |
 | `LOG_CATEGORY` / `LogCategory` | `log-categories.ts` | 日志分类 |
-| 核心类型 | `types/*` | `AgentContext` / `SessionMessage` / `AgentEditResult` / `IAgentFileSystem` / `ITool` 等 |
+| 核心类型 | `types/*` | `AgentContext` / `AgentResult` / `SessionMessage` / `IAgentFileSystem` / `ITool` 等 |
 
 > 未列在 `index.ts` 中的导出（`Agent`、`Session`、`ToolRegistry`、各 `Tool` 等）属于内部实现，不应被外部直接引用。
 
@@ -93,7 +102,7 @@ src/
 
 ### 默认工具（`tools/`）
 
-`createDefaultTools()` 返回 7 个工具（`enableBash: false` 时不注册 bash）：
+`createDefaultTools()` 返回 7 个工具（`enableBash: false` 时不注册 bash）。工具顺序即注册顺序，也即系统提示词中呈现给 LLM 的顺序——高频/首选工具靠前：
 
 | 工具 | 标签 | 说明 |
 |------|------|------|
@@ -101,9 +110,13 @@ src/
 | `FileWriteTool` | `<file_write path="...">` | 新建文件或整文件重写（覆盖已有文件需先 `read_file`） |
 | `FileReadTool` | `<read_file path="..."/>` | 读取文件（编辑类工具的前置校验依据） |
 | `ListDirTool` | `<list_dir path="..."/>` | 列出目录内容 |
-| `SearchCodeTool` | `<search_code pattern="..."/>` | 搜索代码 |
-| `BashTool` | `<bash>...</bash>` | 执行 shell 命令（可通过 `enableBash` 关闭） |
-| `DelegateTool` | `<delegate>...</delegate>` | 委派子 Agent |
+| `SearchCodeTool` | `<search_code pattern="..."/>` | 按正则递归搜索文件内容（跳过 node_modules/.git/dist/.openwork） |
+| `BashTool` | `<bash>...</bash>` | 执行 shell 命令（可通过 `enableBash` / `OPENWORK_ENABLE_BASH=0` 关闭） |
+| `DelegateTool` | `<delegate>...</delegate>` | 委派子 Agent（由 Session 拦截并实际启动） |
+
+### SessionMemory（`memory/`）
+
+会话记忆模块：记录消息与工具调用记录（`MemoryEntry` / `ToolCallRecord`），按 `CHARS_PER_TOKEN` 估算 Token 用量并受 `DEFAULT_MEMORY_TOKEN_BUDGET` 预算约束，提供 `IDESnapshot`（打开文件、文件树、光标/选区）与面向 UI 的 `DisplayMessage` 系列展示类型。
 
 ### LLM Gateway（`llm/gateway.ts`）
 
@@ -141,9 +154,7 @@ const result = await runtime.chatStream(
     if (event.type === 'chunk') process.stdout.write(event.text ?? '');
   }
 );
-
 ```
-
 
 ## 技术细节
 
@@ -151,3 +162,4 @@ const result = await runtime.chatStream(
 - 通过 `package.json` 的 `exports` 字段同时支持 ESM 与 CJS 引用
 - 构建：`npm run build -w packages/agent`（`tsc`）；监听：`npm run dev -w packages/agent`
 - CLI：根目录 `npm run cli`；通过 `npm run cli -- --url <apiUrl> --model <model> --key <apiKey>` 传入待测模型（也可用环境变量 `LLM_API_URL`/`LLM_MODEL`/`LLM_API_KEY`）
+- 测试：vitest（`packages/agent/test/`，`npm test`）—— SessionMemory / createDefaultTools / maskApiKey 共 16 个用例

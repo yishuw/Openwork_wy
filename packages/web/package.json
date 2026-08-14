@@ -2,7 +2,7 @@
   "name": "@openwork/web",
   "version": "0.1.0",
   "private": true,
-  "description": "OpenWork web frontend - Vue 3 + Monaco Editor",
+  "description": "OpenWork web frontend - Vue 3 multi-format office workbench UI (Monaco + office viewers + AI assistant)",
   "type": "module",
   "scripts": {
     "predev": "npm --prefix ../.. run build:agent",

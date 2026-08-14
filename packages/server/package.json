@@ -2,7 +2,7 @@
   "name": "@openwork/server",
   "version": "0.1.0",
   "private": true,
-  "description": "OpenWork server backend - file operations and agent API",
+  "description": "OpenWork server backend - file / workspace / agent / LLM / MCP REST·SSE API",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {

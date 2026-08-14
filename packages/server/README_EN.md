@@ -1,6 +1,6 @@
 # @openwork/server
 
-OpenWork backend — Express-based file operations API and AI Agent endpoints.
+OpenWork backend — the Express-based general-purpose AI office workbench server, providing the full REST·SSE API for files / workspace / agent / LLM / MCP.
 
 ---
 
@@ -15,13 +15,13 @@ src/
 │   └── types.ts          # FileEntry type definition
 ├── routes/
 │   ├── files.ts          # /api/files/*    — File system CRUD (10 endpoints)
-│   ├── agent.ts          # /api/agent/*    — Agent chat, SSE streaming, edit application (3 endpoints)
+│   ├── agent.ts          # /api/agent/*    — Agent chat and SSE streaming (2 endpoints)
 │   ├── workspace.ts      # /api/workspace/* — Workspace management, agent session persistence (9 endpoints)
 │   ├── llm.ts            # /api/llm/*      — LLM provider CRUD + test (6 endpoints)
 │   ├── mcp.ts            # /api/mcp/*      — MCP server CRUD + test/tools (6 endpoints)
 │   └── config.ts         # /api/config/*   — JSON config file read/write (2 endpoints)
 ├── middleware/
-│   ├── auth.ts           # Bearer token auth middleware (not wired in, requires manual import)
+│   ├── auth.ts           # Bearer token auth middleware (mounted on /api/*, enabled by setting AUTH_TOKEN)
 │   └── requestLogger.ts  # HTTP request logging middleware
 └── workspace/
     └── manager.ts        # WorkspaceManager — workspace lifecycle, AgentRuntime cache, session persistence
@@ -77,7 +77,7 @@ npm run dev:all      # server + web concurrently
 | `PORT` | — | Highest | Server port |
 | `SERVER_PORT` | — | Medium (fallback) | Server port |
 | `SERVE_STATIC` | — | — | Static files directory path |
-| `AUTH_TOKEN` | — | — | Bearer token (requires manual wiring of auth.ts middleware) |
+| `AUTH_TOKEN` | — | — | Bearer token (mounted on `/api/*`; enables checks when set — open locally if unset, must be set for remote deployments) |
 
 ---
 
@@ -235,14 +235,14 @@ interface AgentContext {
 }
 ```
 
-### AgentEditResult
+### ChatResult
 
 ```typescript
-interface AgentEditResult {
-  path: string;        // File path
-  operation: 'create' | 'modify' | 'delete'; // Operation type
-  content?: string;    // File content for create/modify
-  original?: string;   // Original content for modify
+interface ChatResult {
+  content: string;   // Reply text
+  turns: number;     // Tool-loop turns
+  toolCalls: { type: string; params: Record<string, string> }[]; // Tool-call records
+  thinking?: string; // Thinking content produced this conversation (if any)
 }
 ```
 
@@ -596,10 +596,10 @@ SSE streaming agent conversation. This is the **core endpoint**, supporting mult
 |------------|-------------|-------------|
 | `chunk` | `{ chunk: string }` | Text fragment from LLM output |
 | `thinking` | `{ thinking: string }` | Agent reasoning/thinking content |
-| `tool_start` | `{ tool_start: string }` | Tool invocation starts, format: `🔍 tool_name: description` |
-| `tool_end` | `{ tool_end: string }` | Tool invocation completes, format: `tool_name complete` |
+| `tool_start` | `{ tool_start: { toolType, toolLabel, toolParams } }` | Tool invocation starts; carries tool name, display label, and params |
+| `tool_end` | `{ tool_end: { toolType, durationMs } }` | Tool invocation completes; carries tool name and duration (ms) |
 | `tool_result` | `{ tool_result: { name: string, content: string } }` | Tool execution result |
-| `done` | `{ done: true, edits: AgentEditResult[], toolCalls: number }` | Stream ends, contains edit results and tool call count |
+| `done` | `{ done: true, toolCalls: number }` | Stream ends, contains tool-call count |
 | `error` | `{ error: string }` | Error message |
 
 **Heartbeat**: Server sends SSE comment `: heartbeat` every 15 seconds to prevent proxy timeouts.
@@ -609,9 +609,9 @@ SSE streaming agent conversation. This is the **core endpoint**, supporting mult
 ```
 data: {"thinking":"User wants to create an Express server..."}
 
-data: {"tool_start":"🔍 read_file: package.json"}
+data: {"tool_start":{"toolType":"read_file","toolLabel":"read_file: package.json","toolParams":{"path":"package.json"}}}
 
-data: {"tool_end":"read_file complete"}
+data: {"tool_end":{"toolType":"read_file","durationMs":3}}
 
 data: {"tool_result":{"name":"read_file","content":"{\n  \"name\": \"my-project\"\n}"}}
 
@@ -621,7 +621,7 @@ data: {"chunk":", I'll help"}
 
 data: {"chunk":" you create an Express server."}
 
-data: {"done":true,"edits":[],"toolCalls":1}
+data: {"done":true,"toolCalls":1}
 ```
 
 ---
@@ -1284,21 +1284,23 @@ Write a config file.
 ```
 : heartbeat                          ← Keep-alive comment sent after 15s idle
 
-data: {"tool_start":"🔌 MCP: 1 server(s), 3 tool(s)"}\n\n
+data: {"tool_start":{"toolType":"mcp","toolLabel":"MCP: 1 server(s), 3 tool(s)","toolParams":{}}}
 
-data: {"thinking":"Analyzing user requirements..."}\n\n
+data: {"thinking":"Analyzing user requirements..."}
 
-data: {"tool_start":"🔍 read_file: src/index.ts"}\n\n
+data: {"tool_start":{"toolType":"read_file","toolLabel":"read_file: src/index.ts","toolParams":{"path":"src/index.ts"}}}
 
-data: {"tool_end":"read_file complete"}\n\n
+data: {"tool_end":{"toolType":"read_file","durationMs":4}}
 
-data: {"tool_result":{"name":"read_file","content":"import express..."}}\n\n
+data: {"tool_result":{"name":"read_file","content":"import express..."}}
 
-data: {"chunk":"Based"}\n\n
-data: {"chunk":" on your"}\n\n
-data: {"chunk":" code,"}\n\n
+data: {"chunk":"Based"}
 
-data: {"done":true,"edits":[{"path":"src/app.ts","operation":"create","content":"..."}],"toolCalls":1}\n\n
+data: {"chunk":" on your"}
+
+data: {"chunk":" code,"}
+
+data: {"done":true,"toolCalls":1}
 ```
 
 ### Client Integration Example
@@ -1344,7 +1346,7 @@ while (true) {
 | `tool_start` | Show progress in tool call panel |
 | `tool_end` | Mark tool call as complete |
 | `tool_result` | Display tool execution result |
-| `done` | Stream ends; `edits` array contains applicable edit suggestions; `toolCalls` is the total tool call count |
+| `done` | Stream ends; `toolCalls` is the total tool call count |
 | `error` | Display error message; a `done` event will follow |
 | `: heartbeat` | Ignore (SSE comment) |
 
@@ -1376,8 +1378,7 @@ while (true) {
 ### Authentication Middleware
 
 - `middleware/auth.ts` implements Bearer token validation
-- **Not imported in `index.ts`** — setting `AUTH_TOKEN` has no effect
-- To enable, manually wire it in `createApp()`
+- **Mounted on `/api/*` in `index.ts`** — set `AUTH_TOKEN` to enable checks; requests without a token are rejected once set (unset = open locally, must be set for remote deployments)
 
 ---
 

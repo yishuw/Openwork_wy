@@ -2,7 +2,7 @@
 
 > [中文](README.md)
 
-The Electron desktop shell for OpenWork — loads the `@openwork/web` frontend and provides local file-system access via an IPC bridge or an embedded server.
+The Electron desktop shell for OpenWork — loads the `@openwork/web` frontend (the general-purpose AI office workbench UI) and provides local file-system access via an IPC bridge or an embedded server.
 
 > The npm package name is `openwork-desktop` (not `@openwork/electron`).
 
@@ -20,7 +20,7 @@ Both entries share the same window construction, native menu, `openwork://` prot
 ```
 src/
 ├── main.ts             # Standard entry: BrowserWindow, native menu, openwork:// protocol, multi-window, IPC file ops
-├── main-server.ts      # Embedded-server entry: startServer + single-instance lock + config:read/write + __VIBE_SERVER_PORT__
+├── main-server.ts      # Embedded-server entry: startServer + single-instance lock + config:read/write + __OPENWORK_SERVER_PORT__
 ├── preload.ts          # Context bridge exposing window.electronAPI
 └── ipc/file-handler.ts # file:* / dialog:* IPC handlers (per-window workspace root)
 build.mjs               # esbuild bundling (runs after tsc)

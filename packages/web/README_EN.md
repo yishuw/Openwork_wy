@@ -2,7 +2,7 @@
 
 > [中文](README.md)
 
-OpenWork frontend — an AI-assisted code editor built on Vue 3 + Vite + Monaco Editor + Pinia, using the naive-ui component library and vue-i18n for internationalization.
+OpenWork frontend — the UI of a **general-purpose AI-powered office workbench**, built on Vue 3 + Vite + Monaco Editor + Pinia, using the naive-ui component library and vue-i18n for internationalization. Core shape: a file tree on the left, multi-format tab viewers in the middle (code / Word / Excel / PPT / PDF / Markdown / HTML / images), and an AI assistant panel on the right.
 
 ## Tech stack
 
@@ -10,12 +10,12 @@ OpenWork frontend — an AI-assisted code editor built on Vue 3 + Vite + Monaco 
 |------|---------|
 | Vue 3 (Composition API) | UI framework |
 | Vite | Build / dev server (port 5173, proxies `/api` to `:20385`) |
-| Monaco Editor | Code editor |
+| Monaco Editor | Code viewer / editor |
+| `@vue-office/*` / docx-preview | Excel / PPTX / Word document preview |
 | Pinia | State management |
 | naive-ui | UI component library |
 | vue-i18n | Chinese / English i18n |
-| markdown-it + KaTeX | Agent message Markdown / math rendering |
-| `@vue-office/*` / docx-preview | Excel / PPTX / Word document preview |
+| markdown-it + KaTeX | Agent messages & Markdown rendering / math |
 
 > The only workspace dependency is **`@openwork/agent`** (mainly for types). The frontend does not run the agent loop itself — it calls the server over SSE.
 
@@ -25,27 +25,47 @@ OpenWork frontend — an AI-assisted code editor built on Vue 3 + Vite + Monaco 
 src/
 ├── main.ts                       # App entry (createApp + Pinia + i18n + naive-ui)
 ├── App.vue                       # Root component
-├── env.d.ts                      # Type decls (.vue modules, window.electronAPI, FSA API)
+├── env.d.ts                      # Type decls (.vue modules, window.electronAPI, FSA API, @vue-office modules)
 ├── components/
-│   ├── layout/                    # MainLayout (orchestrator), SideBar, RightToolbar, AboutDialog
-│   ├── toolbar/Toolbar.vue        # Top toolbar (File menu, window controls)
-│   ├── editor/                    # MonacoEditor + viewers: Image/Pdf/Docx/Excel/Pptx/Markdown/Html
-│   ├── file-tree/                 # FileTree, TreeNode, contextMenu.ts
-│   ├── new-file-tree/             # Newer file tree (NewFileTree / NewFileTreeMenu / types)
-│   ├── agent/                     # AgentPanel, ModeSelector, ProviderSelect, SettingsDialog
-│   ├── mcp/                       # McpSettingsPanel, McpServerItem, McpEditDialog, McpToolList
-│   ├── settings/                  # SettingsModal, GeneralSettings, ProviderSettingsSection, McpSettingsContent
-│   ├── dialogs/                   # OpenFileDialog, OpenFolderDialog
-│   ├── SearchPanel.vue / SearchPopup.vue   # Search (results grouped by file)
-│   ├── StatusBar.vue              # Status bar (language, cursor, workspace mode)
+│   ├── layout/
+│   │   ├── MainLayout.vue         # Core orchestrator: layout, tabs, draggable splitters, drag-to-open, keyboard events
+│   │   ├── SideBar.vue            # Side panel container
+│   │   ├── RightToolbar.vue       # Right toolbar (Agent / MCP toggle)
+│   │   └── AboutDialog.vue        # About dialog
+│   ├── toolbar/Toolbar.vue        # Top toolbar (File menu, new items, window controls)
+│   ├── editor/                    # Renderers for the 8 view modes
+│   │   ├── MonacoEditor.vue       # Code editor (theme-aware)
+│   │   ├── ImageViewer.vue        # Images (png/jpg/gif/svg/webp/bmp/ico/tiff)
+│   │   ├── PdfViewer.vue          # PDF rendering (<embed>)
+│   │   ├── DocxViewer.vue         # Word viewer (zoom / fit-to-width; legacy .doc unsupported)
+│   │   ├── ExcelViewer.vue        # Excel viewer
+│   │   ├── PptxViewer.vue         # PowerPoint viewer
+│   │   ├── MarkdownViewer.vue     # Markdown rendering (with KaTeX)
+│   │   └── HtmlViewer.vue         # HTML live preview
+│   ├── new-file-tree/             # File tree (NewFileTree / NewFileTreeMenu / types, naive-ui menu)
+│   ├── agent/
+│   │   ├── AgentChatB.vue         # AI chat panel (messages, streaming, tool status; naive-ui)
+│   │   ├── ModeSelector.vue       # build / plan mode toggle
+│   │   ├── ProviderSelect.vue     # LLM provider selector
+│   │   ├── index.ts               # Component exports
+│   │   └── chat-b/                # Panel sub-components (ChatEmptyState / ChatFooter / ChatInputArea /
+│   │                              #   ChatMessageItem / ChatResponseBlock / ChatSessionTabs /
+│   │                              #   ChatThinkingBlock / ChatToolBlock)
+│   ├── mcp/                       # MCP management (McpSettingsPanel / McpServerItem / McpEditDialog / McpToolList)
+│   ├── settings/                  # Settings modal (SettingsModal / GeneralSettings / ProviderSettingsSection / McpSettingsContent)
+│   ├── dialogs/                   # Open file / folder dialogs (OpenFileDialog / OpenFolderDialog)
+│   ├── SearchPanel.vue            # Workspace-wide content search (results grouped by file, click-to-navigate)
+│   ├── SearchPopup.vue            # Search popup
+│   ├── StatusBar.vue              # Status bar (language, cursor position, workspace mode)
 │   ├── SaveDialog.vue             # Save / Save-As dialog
 │   └── NewItemDialog.vue          # New file / folder dialog
 ├── composables/
-│   ├── useFileSystem.ts           # File operations + global keyboard shortcuts
+│   ├── useFileSystem.ts           # File operations + global keyboard shortcuts + delete undo
 │   ├── useFileClipboard.ts        # File cut / copy / paste
 │   ├── useFileTreeContextMenu.ts  # File-tree context-menu integration
 │   ├── useEditor.ts               # Monaco instance management, file opening
-│   ├── useAgent.ts                # Agent state, streaming, context assembly
+│   ├── useAgent.ts                # Agent state, streaming, context assembly (IDESnapshot)
+│   ├── useSessionMessages.ts      # Session message management
 │   ├── useProviderSettings.ts     # LLM provider config (persisted)
 │   ├── useLLMSettings.ts          # Server-side LLM settings
 │   ├── useMcpSettings.ts          # MCP server list
@@ -87,7 +107,7 @@ User interaction → Vue components (presentation)
 ```
 
 - **Single source of truth**: Pinia `useEditorStore` (tabs, file tree, workspace), `useSessionsStore` (agent sessions), `useSettingsStore` (language / theme)
-- **Editor singleton**: `editorInstance.ts` shares the Monaco instance across components
+- **Viewer singleton**: `editorInstance.ts` shares the Monaco instance across components
 - **Agent**: all calls go through `agentService` to the server's `/api/agent/stream` (SSE); there is no built-in local agent loop anymore
 
 ## Store layer — `stores/editor.ts`
@@ -101,7 +121,7 @@ User interaction → Vue components (presentation)
 | `activeWorkspaceId` | Current server workspace ID |
 | `isSingleFile` | Single-file mode flag |
 
-Each `EditorTab` carries a `viewMode` (`code` / `image` / `docx` / `excel` / `pptx` / `pdf` / `html` / `markdown`), chosen by file extension to pick the renderer.
+Each `EditorTab` carries a `viewMode` (`code` / `image` / `docx` / `excel` / `pptx` / `pdf` / `html` / `markdown`), chosen by file extension to pick the renderer (`getViewModeFromPath()`).
 Actions: `openFile`, `newUntitled`, `closeTab`, `updateContent`, `saveTab`, `setActiveTab`, `setTabPath`, `addWorkspaceRoot`, `enterSingleFileMode` / `exitSingleFileMode`.
 
 ## Runtime environment adaptation — `services/fileService.ts`
@@ -124,4 +144,4 @@ npm run build -w packages/web      # Build to packages/web/dist/
 npm run typecheck -w packages/web  # vue-tsc -b type check
 ```
 
-> Note: this package is `"type": "module"` and its `tsconfig` sets `noEmit`, so type checking uses `vue-tsc` (not plain `tsc`). The Vite config aliases `@` → `src/`, and `monaco-editor` is in `optimizeDeps.include`.
+> Note: this package is `"type": "module"` and its `tsconfig` sets `noEmit`, so type checking uses `vue-tsc` (not plain `tsc`); the repo has a set of pre-existing vue-tsc type errors (the root `npm run typecheck` is the gate). The Vite config aliases `@` → `src/`, and `monaco-editor` is in `optimizeDeps.include`.
