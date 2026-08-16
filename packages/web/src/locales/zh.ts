@@ -104,6 +104,7 @@ export default {
     currentDirectoryLabel: '当前位置',
     selectedDirectoryLabel: '已选择目录',
     selectFolderSubtitle: '选择一个目录作为当前工作区',
+    selectFileSubtitle: '选择一个文件以在 OpenWork 中打开',
     permissionDenied: '无法读取此目录。权限不足或路径无效。',
     truncated: '此目录项目较多，仅显示前 1000 个文件夹。',
     createFolderFailed: '创建文件夹失败',

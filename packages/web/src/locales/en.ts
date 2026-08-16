@@ -104,6 +104,7 @@ export default {
     currentDirectoryLabel: 'Current location',
     selectedDirectoryLabel: 'Selected folder',
     selectFolderSubtitle: 'Select a folder to use as your workspace',
+    selectFileSubtitle: 'Select a file to open in OpenWork',
     permissionDenied: 'Unable to read this folder. Permission denied or path invalid.',
     truncated: 'This folder contains many items. Only the first 1000 folders are shown.',
     createFolderFailed: 'Failed to create folder',
