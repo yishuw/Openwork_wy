@@ -1204,26 +1204,60 @@ function startRightPanelResize(e: MouseEvent) {
 .editor-tabs {
   flex-shrink: 0;
   user-select: none;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .editor-tabs :deep(.n-tabs-pane-wrapper) {
   display: none;
 }
 .editor-tabs :deep(.n-tabs-nav) {
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+  border-bottom: none;
+  padding: 0 var(--space-2);
 }
 .editor-tabs :deep(.n-tabs-tab) {
   background: transparent;
-  border-right: 1px solid var(--border-subtle);
+  border: none;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  margin: var(--space-1) var(--space-1) 0 0;
+  padding: 0 var(--space-3);
+  height: 28px;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 .editor-tabs :deep(.n-tabs-tab--active) {
-  background: var(--bg-primary);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
 }
 .editor-tabs :deep(.n-tabs-tab:hover) {
   background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.editor-tabs :deep(.n-tabs-tab__close) {
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+.editor-tabs :deep(.n-tabs-tab:hover .n-tabs-tab__close),
+.editor-tabs :deep(.n-tabs-tab--active .n-tabs-tab__close) {
+  opacity: 1;
+}
+.editor-tabs :deep(.n-tabs-tab__close:hover) {
+  color: var(--text-primary);
+  background: var(--surface-selected);
+  border-radius: var(--radius-sm);
 }
 .tab-dirty-indicator {
-  color: var(--accent);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: var(--space-1);
+  display: inline-block;
+  font-size: 0;
+  line-height: 0;
+  vertical-align: middle;
 }
 .editor-container {
   flex: 1;
