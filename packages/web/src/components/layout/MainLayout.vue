@@ -941,7 +941,7 @@ async function handleOpenFile() {
     if (!path) return;
     const choice = await showWorkspaceConfirmDialog(path, true);
     if (choice === 'new') await openFileInNewContext(path);
-    else if (choice === 'current') await fs.openFileDialog();
+    else if (choice === 'current') await fs.openFileAsLightweightWorkspace(path);
   } else {
     await fs.openFileDialog();
   }

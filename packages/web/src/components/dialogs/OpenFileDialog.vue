@@ -104,6 +104,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NModal, NButton, NInput, NIcon, NSpin, NText } from 'naive-ui'
 import { CreateOutline, ArrowUpOutline, FolderOutline, FolderOpenOutline, DocumentOutline } from '@vicons/ionicons5'
+import { createFileServiceClient } from '../../services/fileService'
 
 const { t } = useI18n()
 
@@ -111,6 +112,8 @@ const emit = defineEmits<{
   confirm: [filePath: string]
   cancel: []
 }>()
+
+const client = createFileServiceClient();
 
 interface TreeNode {
   name: string; path: string; isDirectory: boolean
@@ -167,11 +170,9 @@ async function handleClick(node: TreeNode) {
     if (!node.loaded) {
       node.loading = true
       try {
-        const resp = await fetch(`/api/workspace/browse?path=${encodeURIComponent(node.path)}`)
-        if (!resp.ok) throw new Error('Browse failed')
-        const data = await resp.json()
-        const entries: any[] = data.entries
-        entries.sort((a: any, b: any) => {
+        const data = await client.browseFilesystem(node.path)
+        const entries = data.entries
+        entries.sort((a, b) => {
           if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
           return a.name.localeCompare(b.name)
         })
@@ -213,17 +214,9 @@ async function confirmNewFolder() {
   if (!name) { newFolderError.value = t('openDialog.emptyFolderName'); return }
   if (INVALID_CHARS.test(name)) { newFolderError.value = t('openDialog.invalidFolderName'); return }
 
-  const fullPath = creatingParent.value.replace(/\/$/, '') + '/' + name
   try {
-    const resp = await fetch('/api/files/mkdir', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: name, root: creatingParent.value }),
-    })
-    if (!resp.ok) {
-      const data = await resp.json().catch(() => ({}))
-      throw new Error((data as any).error || `HTTP ${resp.status}`)
-    }
+    if (!client.createDirectory) throw new Error(t('openDialog.newFolderError'));
+    await client.createDirectory(creatingParent.value, name)
     const parentNode = nodes.value.find(n => n.path === creatingParent.value)
     if (parentNode) { removeChildren(parentNode.path); parentNode.loaded = false; parentNode.expanded = false; await handleClick(parentNode) }
     showNewFolderDialog.value = false
@@ -258,9 +251,7 @@ function removeChildren(parentPath: string) {
 async function loadRoots() {
   loadingRoots.value = true
   try {
-    const resp = await fetch('/api/workspace/roots')
-    if (!resp.ok) throw new Error('Failed')
-    const data = await resp.json()
+    const data = await client.getWorkspaceRoots()
     const roots: TreeNode[] = []
     for (const root of data) {
       roots.push({ name: root.path === '/' ? '/' : root.path, path: root.path, isDirectory: true, depth: 0, expanded: false, loaded: false, loading: false, parent: null })

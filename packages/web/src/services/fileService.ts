@@ -634,8 +634,8 @@ export function createFileServiceClient(): FileServiceClient {
       openFolder: ipc.openFolder,
       openFile: ipc.openFile,
       saveFileAs: ipc.saveFileAs,
-      browseFilesystem: ipc.browseFilesystem,
-      getWorkspaceRoots: ipc.getWorkspaceRoots,
+      browseFilesystem: http.browseFilesystem,
+      getWorkspaceRoots: http.getWorkspaceRoots,
       setWorkspaceRoot: ipc.setWorkspaceRoot,
       // workspace/session 操作 → HTTP server
       openWorkspace: http.openWorkspace,
