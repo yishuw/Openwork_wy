@@ -422,12 +422,12 @@ export function useFileSystem() {
 
   /** 仅获取文件夹路径（通过对话框选择），不打开工作区 */
   async function resolveFolderPath(): Promise<string | null> {
+    if (openFolderDialogHandler) {
+      return await openFolderDialogHandler();
+    }
     if (env === 'electron') {
       const client = getClient();
       return await client.openFolder();
-    }
-    if (openFolderDialogHandler) {
-      return await openFolderDialogHandler();
     }
     return null;
   }
@@ -481,47 +481,12 @@ export function useFileSystem() {
     await openWorkspaceAtPath(folderPath);
   }
 
-  /** 根据当前环境选择合适的"打开文件夹"方式 */
+  /** 打开文件夹：先选择目录，再走统一的 workspace 打开逻辑 */
   async function openFolderDialog(): Promise<string | null> {
-    if (env === 'electron') {
-      const client = getClient();
-      const root = await client.openFolder();
-      if (root) {
-        store.exitSingleFileMode();
-        store.tabs.length = 0;
-        store.activeTabId = null;
-
-        const sc = getServerClient();
-        if (store.activeWorkspaceId) {
-          try { await sc.closeWorkspace(store.activeWorkspaceId); } catch { /* ignore */ }
-        }
-        try {
-          const info = await sc.openWorkspace(root);
-          client.setWorkspaceRoot?.(info.rootPath);
-          store.workspaceRoots = [{ path: info.rootPath, name: info.rootName, mode: 'local', workspaceId: info.workspaceId }];
-          store.activeWorkspaceId = info.workspaceId;
-          const sessionStore = useSessionStore();
-          await sessionStore.bindWorkspace(info.workspaceId, info.agentSessions, info.rootPath);
-        } catch {
-          error.value = t('fs.singleFileWorkspaceFailed');
-          return null;
-        }
-
-        await loadDirectory('.');
-        window.electronAPI?.registerWorkspace?.(root);
-      }
-      return root;
-    }
-
-    // server / browser 模式：使用自定义对话框
-    if (openFolderDialogHandler) {
-      const rootPath = await openFolderDialogHandler();
-      if (rootPath) {
-        await openWorkspaceAtPath(rootPath);
-        return rootPath;
-      }
-    }
-    return null;
+    const rootPath = await resolveFolderPath();
+    if (!rootPath) return null;
+    await openWorkspaceViaPath(rootPath);
+    return rootPath;
   }
 
   /** 根据当前环境选择合适的"打开文件"方式 */

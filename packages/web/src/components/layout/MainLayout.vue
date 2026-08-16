@@ -927,7 +927,7 @@ async function handleOpenFolder() {
     if (!path) return;
     const choice = await showWorkspaceConfirmDialog(path, false);
     if (choice === 'new') await openFolderInNewContext(path);
-    else if (choice === 'current') await fs.openFolderDialog();
+    else if (choice === 'current') await fs.openWorkspaceViaPath(path);
   } else {
     await fs.openFolderDialog();
   }
