@@ -3,13 +3,19 @@
     v-model:show="showModal"
     preset="card"
     class="folder-picker-modal"
-    :title="$t('openDialog.selectFolder')"
-    style="width: 680px; max-width: calc(100vw - 48px); min-width: 480px; max-height: 80vh"
+    style="width: 720px; height: 540px; max-width: calc(100vw - 48px); min-width: 560px; max-height: 80vh; min-height: 0;"
     @after-leave="$emit('cancel')"
   >
+    <template #header>
+      <div class="picker-header">
+        <div class="picker-title">{{ $t('openDialog.selectFolder') }}</div>
+        <div class="picker-subtitle">{{ $t('openDialog.selectFolderSubtitle') }}</div>
+      </div>
+    </template>
+
     <div class="folder-picker">
-      <div class="picker-path-area">
-        <div v-if="!editingPath" class="breadcrumbs">
+      <div class="path-bar">
+        <div v-if="!editingPath" class="path-breadcrumbs">
           <template v-for="(crumb, index) in displayBreadcrumbs" :key="crumb.path">
             <span v-if="index > 0" class="breadcrumb-sep">/</span>
             <button
@@ -20,9 +26,6 @@
               {{ crumb.name || crumb.path }}
             </button>
           </template>
-          <button class="path-edit-btn" :title="$t('openDialog.editPath')" @click="beginEditPath">
-            <n-icon size="14" :component="PencilOutline" />
-          </button>
         </div>
         <input
           v-else
@@ -34,13 +37,19 @@
           @keydown.enter.prevent="submitPath"
           @keydown.esc.prevent="cancelEditPath"
         />
+        <button v-if="!editingPath" class="path-edit-btn" :title="$t('openDialog.editPath')" @click="beginEditPath">
+          <n-icon size="14" :component="PencilOutline" />
+        </button>
       </div>
 
       <div v-if="error" class="picker-error">{{ error }}</div>
 
       <div class="browser-surface">
         <div class="column">
-          <div class="column-header">{{ $t('openDialog.currentDirectory') }}</div>
+          <div class="column-header">
+            <span class="column-title">{{ currentFolderName }}</span>
+            <span class="column-subtitle">{{ $t('openDialog.currentDirectoryLabel') }}</span>
+          </div>
           <div class="column-list">
             <n-spin v-if="currentLoading && currentEntries.length === 0" size="small" class="column-state" />
             <template v-else>
@@ -68,7 +77,7 @@
         <div v-if="selectedPath" class="column">
           <div class="column-header">
             <span class="column-title">{{ selectedFolderName }}</span>
-            <span class="column-subtitle">{{ selectedPath }}</span>
+            <span class="column-subtitle">{{ $t('openDialog.selectedDirectoryLabel') }}</span>
           </div>
           <div class="column-list">
             <n-spin v-if="childLoading && childEntries.length === 0" size="small" class="column-state" />
@@ -94,19 +103,22 @@
       </div>
 
       <div class="picker-footer">
-        <button class="footer-btn" :disabled="!selectedPath && !currentPath" @click="openNewFolderDialog">
-          <n-icon size="14" :component="CreateOutline" />
-          <span>{{ $t('openDialog.newFolder') }}</span>
-        </button>
-        <button class="footer-btn" @click="showHidden = !showHidden">
-          <n-icon size="14" :component="showHidden ? EyeOutline : EyeOffOutline" />
-          <span>{{ $t('openDialog.showHidden') }}</span>
-        </button>
-        <div class="footer-spacer"></div>
-        <button class="btn-cancel" @click="$emit('cancel')">{{ $t('openDialog.cancel') }}</button>
-        <button class="btn-open" :disabled="!selectedPath && !currentPath" @click="confirm">
-          {{ $t('openDialog.open') }}
-        </button>
+        <div class="footer-actions">
+          <button class="footer-btn" :disabled="!selectedPath && !currentPath" @click="openNewFolderDialog">
+            <n-icon size="14" :component="CreateOutline" />
+            <span>{{ $t('openDialog.newFolder') }}</span>
+          </button>
+          <button class="footer-btn" @click="showHidden = !showHidden">
+            <n-icon size="14" :component="showHidden ? EyeOutline : EyeOffOutline" />
+            <span>{{ $t('openDialog.showHidden') }}</span>
+          </button>
+        </div>
+        <div class="footer-decisions">
+          <button class="btn-cancel" @click="$emit('cancel')">{{ $t('openDialog.cancel') }}</button>
+          <button class="btn-open" :disabled="!selectedPath && !currentPath" @click="confirm">
+            {{ $t('openDialog.open') }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -202,8 +214,20 @@ const displayBreadcrumbs = computed(() => {
   return [{ name: fallbackPath, path: fallbackPath, isDirectory: true }];
 });
 
+const currentFolderName = computed(() => {
+  if (breadcrumbs.value.length > 0) {
+    const last = breadcrumbs.value[breadcrumbs.value.length - 1];
+    if (last && (last.name || last.path)) return last.name || last.path;
+  }
+  return currentPath.value || '';
+});
+
 const selectedFolderName = computed(() => {
-  const path = selectedPath.value || currentPath.value || '';
+  if (childBreadcrumbs.value.length > 0) {
+    const last = childBreadcrumbs.value[childBreadcrumbs.value.length - 1];
+    if (last && (last.name || last.path)) return last.name || last.path;
+  }
+  const path = selectedPath.value || '';
   const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
   return parts[parts.length - 1] || path;
 });
@@ -371,22 +395,50 @@ onMounted(() => {
 
 <style scoped>
 .folder-picker {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-.picker-path-area {
-  min-height: 30px;
+.picker-header {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.breadcrumbs {
+.picker-title {
+  font-size: 17px;
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.picker-subtitle {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.path-bar {
+  min-height: 38px;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: var(--space-1);
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-1) 0 var(--space-3);
+}
+
+.path-breadcrumbs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .breadcrumb {
@@ -397,6 +449,7 @@ onMounted(() => {
   padding: var(--space-1) var(--space-1);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  white-space: nowrap;
   transition: color var(--transition-fast), background var(--transition-fast);
 }
 
@@ -414,6 +467,7 @@ onMounted(() => {
   color: var(--text-disabled);
   font-size: var(--font-xs);
   user-select: none;
+  flex-shrink: 0;
 }
 
 .path-edit-btn {
@@ -427,6 +481,7 @@ onMounted(() => {
   justify-content: center;
   border-radius: var(--radius-sm);
   cursor: pointer;
+  flex-shrink: 0;
   transition: color var(--transition-fast), background var(--transition-fast);
 }
 
@@ -441,20 +496,20 @@ onMounted(() => {
 }
 
 .path-editor {
-  width: 100%;
-  height: 30px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: transparent;
+  border: none;
   color: var(--text-primary);
   font-size: var(--font-sm);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-2);
   outline: none;
-  transition: border-color var(--transition-fast);
 }
 
 .path-editor:focus {
-  border-color: var(--accent);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .picker-error {
@@ -466,9 +521,9 @@ onMounted(() => {
 }
 
 .browser-surface {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  min-height: 280px;
-  max-height: 360px;
   background: var(--surface-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -478,6 +533,7 @@ onMounted(() => {
 .column {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -499,6 +555,15 @@ onMounted(() => {
 }
 
 .column-title {
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.column-subtitle {
   font-size: var(--font-xs);
   color: var(--text-muted);
   white-space: nowrap;
@@ -506,19 +571,11 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 
-.column-subtitle {
-  font-size: 10px;
-  color: var(--text-muted);
-  opacity: 0.7;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .column-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: var(--space-1);
+  padding: var(--space-2) var(--space-1);
 }
 
 .dir-row {
@@ -526,12 +583,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: 34px;
+  height: 36px;
   padding: 0 var(--space-3);
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: var(--font-sm);
+  font-size: var(--font-base);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast);
@@ -545,6 +602,8 @@ onMounted(() => {
 .dir-row.selected {
   background: var(--surface-selected);
   color: var(--text-primary);
+  font-weight: var(--weight-medium);
+  box-shadow: inset 2px 0 0 var(--text-primary);
 }
 
 .dir-name {
@@ -563,7 +622,7 @@ onMounted(() => {
 
 .dir-row:hover .dir-chevron,
 .dir-row.selected .dir-chevron {
-  opacity: 1;
+  opacity: 0.8;
 }
 
 .column-state {
@@ -587,6 +646,19 @@ onMounted(() => {
 .picker-footer {
   display: flex;
   align-items: center;
+  gap: var(--space-3);
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.footer-decisions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
   gap: var(--space-2);
 }
 
@@ -594,7 +666,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  height: 30px;
+  height: 32px;
   padding: 0 var(--space-3);
   border: none;
   background: transparent;
@@ -615,19 +687,15 @@ onMounted(() => {
   cursor: default;
 }
 
-.footer-spacer {
-  flex: 1;
-}
-
 .btn-cancel,
 .btn-open {
-  height: 30px;
+  height: 32px;
   padding: 0 var(--space-3);
   border: none;
   font-size: var(--font-sm);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), opacity var(--transition-fast);
 }
 
 .btn-cancel {
@@ -641,13 +709,13 @@ onMounted(() => {
 }
 
 .btn-open {
-  background: var(--accent);
-  color: #ffffff;
+  background: var(--text-primary);
+  color: var(--app-bg);
   font-weight: var(--weight-medium);
 }
 
 .btn-open:hover:not(:disabled) {
-  background: var(--accent-hover);
+  opacity: 0.86;
 }
 
 .btn-open:disabled {
@@ -664,21 +732,25 @@ onMounted(() => {
 
 
 
+
 <style>
 .folder-picker-modal.n-card {
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
 }
 
 .folder-picker-modal .n-card-header {
-  padding: var(--space-4) var(--space-5) var(--space-2);
+  padding: var(--space-4) var(--space-5) var(--space-3);
   border-bottom: none;
+  flex-shrink: 0;
 }
 
 .folder-picker-modal .n-card-header__main {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
@@ -694,6 +766,11 @@ onMounted(() => {
 }
 
 .folder-picker-modal .n-card-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: var(--space-2) var(--space-5) var(--space-4);
 }
 </style>
+
