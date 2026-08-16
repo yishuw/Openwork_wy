@@ -2,6 +2,7 @@
   <n-modal
     v-model:show="showModal"
     preset="card"
+    class="folder-picker-modal"
     :title="$t('openDialog.selectFolder')"
     style="width: 680px; max-width: calc(100vw - 48px); min-width: 480px; max-height: 80vh"
     @after-leave="$emit('cancel')"
@@ -9,14 +10,16 @@
     <div class="folder-picker">
       <div class="picker-path-area">
         <div v-if="!editingPath" class="breadcrumbs">
-          <button
-            v-for="crumb in displayBreadcrumbs"
-            :key="crumb.path"
-            class="breadcrumb"
-            @click="navigateToPath(crumb.path)"
-          >
-            {{ crumb.name || crumb.path }}
-          </button>
+          <template v-for="(crumb, index) in displayBreadcrumbs" :key="crumb.path">
+            <span v-if="index > 0" class="breadcrumb-sep">/</span>
+            <button
+              class="breadcrumb"
+              :class="{ current: index === displayBreadcrumbs.length - 1 }"
+              @click="navigateToPath(crumb.path)"
+            >
+              {{ crumb.name || crumb.path }}
+            </button>
+          </template>
           <button class="path-edit-btn" :title="$t('openDialog.editPath')" @click="beginEditPath">
             <n-icon size="14" :component="PencilOutline" />
           </button>
@@ -35,7 +38,7 @@
 
       <div v-if="error" class="picker-error">{{ error }}</div>
 
-      <div class="columns">
+      <div class="browser-surface">
         <div class="column">
           <div class="column-header">{{ $t('openDialog.currentDirectory') }}</div>
           <div class="column-list">
@@ -60,8 +63,13 @@
           <div v-if="truncated" class="truncated-hint">{{ $t('openDialog.truncated') }}</div>
         </div>
 
+        <div v-if="selectedPath" class="column-divider"></div>
+
         <div v-if="selectedPath" class="column">
-          <div class="column-header">{{ selectedPath }}</div>
+          <div class="column-header">
+            <span class="column-title">{{ selectedFolderName }}</span>
+            <span class="column-subtitle">{{ selectedPath }}</span>
+          </div>
           <div class="column-list">
             <n-spin v-if="childLoading && childEntries.length === 0" size="small" class="column-state" />
             <template v-else>
@@ -90,16 +98,15 @@
           <n-icon size="14" :component="CreateOutline" />
           <span>{{ $t('openDialog.newFolder') }}</span>
         </button>
-        <label class="show-hidden">
-          <input v-model="showHidden" type="checkbox" />
+        <button class="footer-btn" @click="showHidden = !showHidden">
           <n-icon size="14" :component="showHidden ? EyeOutline : EyeOffOutline" />
           <span>{{ $t('openDialog.showHidden') }}</span>
-        </label>
+        </button>
         <div class="footer-spacer"></div>
-        <n-button size="small" @click="$emit('cancel')">{{ $t('openDialog.cancel') }}</n-button>
-        <n-button size="small" type="primary" :disabled="!selectedPath && !currentPath" @click="confirm">
+        <button class="btn-cancel" @click="$emit('cancel')">{{ $t('openDialog.cancel') }}</button>
+        <button class="btn-open" :disabled="!selectedPath && !currentPath" @click="confirm">
           {{ $t('openDialog.open') }}
-        </n-button>
+        </button>
       </div>
     </div>
 
@@ -193,6 +200,12 @@ const displayBreadcrumbs = computed(() => {
   const fallbackPath = selectedPath.value || currentPath.value;
   if (!fallbackPath) return [];
   return [{ name: fallbackPath, path: fallbackPath, isDirectory: true }];
+});
+
+const selectedFolderName = computed(() => {
+  const path = selectedPath.value || currentPath.value || '';
+  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
+  return parts[parts.length - 1] || path;
 });
 
 function filterHidden(entries: DirectoryEntry[]): DirectoryEntry[] {
@@ -364,7 +377,7 @@ onMounted(() => {
 }
 
 .picker-path-area {
-  min-height: 28px;
+  min-height: 30px;
   display: flex;
   align-items: center;
 }
@@ -379,12 +392,12 @@ onMounted(() => {
 .breadcrumb {
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-size: var(--font-sm);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-1) var(--space-1);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: color var(--transition-fast), background var(--transition-fast);
 }
 
 .breadcrumb:hover {
@@ -392,17 +405,29 @@ onMounted(() => {
   background: var(--surface-hover);
 }
 
+.breadcrumb.current {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+.breadcrumb-sep {
+  color: var(--text-disabled);
+  font-size: var(--font-xs);
+  user-select: none;
+}
+
 .path-edit-btn {
   border: none;
   background: transparent;
   color: var(--text-muted);
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
 }
 
 .path-edit-btn:hover {
@@ -410,16 +435,22 @@ onMounted(() => {
   background: var(--surface-hover);
 }
 
+.path-edit-btn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .path-editor {
   width: 100%;
-  height: 28px;
+  height: 30px;
   background: var(--surface-2);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: var(--font-sm);
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-3);
   outline: none;
+  transition: border-color var(--transition-fast);
 }
 
 .path-editor:focus {
@@ -434,11 +465,14 @@ onMounted(() => {
   background: var(--surface-1);
 }
 
-.columns {
+.browser-surface {
   display: flex;
-  gap: var(--space-2);
   min-height: 280px;
   max-height: 360px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .column {
@@ -446,21 +480,39 @@ onMounted(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  overflow: hidden;
+}
+
+.column-divider {
+  width: 1px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .column-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.column-title {
   font-size: var(--font-xs);
   color: var(--text-muted);
-  border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 0;
+}
+
+.column-subtitle {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .column-list {
@@ -474,8 +526,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: 32px;
-  padding: 0 var(--space-2);
+  height: 34px;
+  padding: 0 var(--space-3);
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -542,8 +594,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  height: 28px;
-  padding: 0 var(--space-2);
+  height: 30px;
+  padding: 0 var(--space-3);
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -563,23 +615,85 @@ onMounted(() => {
   cursor: default;
 }
 
-.show-hidden {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
-}
-
 .footer-spacer {
   flex: 1;
+}
+
+.btn-cancel,
+.btn-open {
+  height: 30px;
+  padding: 0 var(--space-3);
+  border: none;
+  font-size: var(--font-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.btn-cancel {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-cancel:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.btn-open {
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: var(--weight-medium);
+}
+
+.btn-open:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn-open:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .new-folder-error {
   color: var(--danger);
   font-size: var(--font-sm);
   margin-top: var(--space-2);
+}
+</style>
+
+
+
+<style>
+.folder-picker-modal.n-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.folder-picker-modal .n-card-header {
+  padding: var(--space-4) var(--space-5) var(--space-2);
+  border-bottom: none;
+}
+
+.folder-picker-modal .n-card-header__main {
+  font-size: 16px;
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.folder-picker-modal .n-card-header__close {
+  color: var(--text-muted);
+}
+
+.folder-picker-modal .n-card-header__close:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+  border-radius: var(--radius-sm);
+}
+
+.folder-picker-modal .n-card-content {
+  padding: var(--space-2) var(--space-5) var(--space-4);
 }
 </style>
