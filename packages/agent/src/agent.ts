@@ -874,7 +874,7 @@ export class Agent {
     };
   }
 
-  /** 执行工具并计时,返回结果与耗时 */
+  /** 执行工具并计时,返回结果与耗时。工具内部抛错统一转为 Error 文本,不中断整轮。 */
   private async executeToolTimed(tool: ParsedTool): Promise<{ result: string; durationMs: number }> {
     const impl = this.tools.get(tool.type);
     if (!impl) {
@@ -890,10 +890,21 @@ export class Agent {
       toolName: tool.type,
     });
     const startMs = Date.now();
-    const result = await impl.execute(tool.params, {
-      workspaceRoot: this.workspaceRoot,
-      readFileState: this.readFileState,
-    });
+    let result: string;
+    try {
+      result = await impl.execute(tool.params, {
+        workspaceRoot: this.workspaceRoot,
+        readFileState: this.readFileState,
+      });
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : String(e);
+      result = `Error: ${msg}`;
+      log.warn(`Tool threw: ${tool.type}: ${msg}`, {
+        ...this.logBaseMeta(),
+        toolName: tool.type,
+        error: msg,
+      });
+    }
     const durationMs = Date.now() - startMs;
     log.info(`Tool done: ${tool.type} (${durationMs}ms, ${result.length} chars)`, {
       ...this.logBaseMeta(),

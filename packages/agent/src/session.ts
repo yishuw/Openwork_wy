@@ -60,7 +60,28 @@ export class Session {
 
     this.memory.appendUserMessage(message);
 
-    const result = await this.runAgent(this.mainAgent, message, ideSnapshot, emit);
+    let result: AgentResult;
+    try {
+      result = await this.runAgent(this.mainAgent, message, ideSnapshot, emit);
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : String(e);
+      result = {
+        agentId: this.mainAgent.definition.id,
+        content: `Agent failed: ${msg}`,
+        turns: 0,
+        toolCalls: [],
+        error: msg,
+        stopReason: 'error',
+      };
+      log.error(`Session start failed after appendUserMessage: ${msg}`, {
+        sessionId: this.id,
+        error: msg,
+      });
+      emit({ type: 'error', data: msg });
+      await this.memoryFinalize(result, this.mainAgent.definition.id);
+      emit({ type: 'done' });
+      throw e;
+    }
     await this.memoryFinalize(result, this.mainAgent.definition.id);
 
     const subResults = await this.handleDelegation(result, ideSnapshot, emit);
@@ -95,7 +116,28 @@ export class Session {
 
     this.memory.appendUserMessage(message);
 
-    const result = await this.runAgentStream(this.mainAgent, message, ideSnapshot, emit, signal);
+    let result: AgentResult;
+    try {
+      result = await this.runAgentStream(this.mainAgent, message, ideSnapshot, emit, signal);
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : String(e);
+      result = {
+        agentId: this.mainAgent.definition.id,
+        content: `Agent failed: ${msg}`,
+        turns: 0,
+        toolCalls: [],
+        error: msg,
+        stopReason: 'error',
+      };
+      log.error(`Session stream failed after appendUserMessage: ${msg}`, {
+        sessionId: this.id,
+        error: msg,
+      });
+      emit({ type: 'error', data: msg });
+      await this.memoryFinalize(result, this.mainAgent.definition.id);
+      emit({ type: 'done' });
+      throw e;
+    }
     await this.memoryFinalize(result, this.mainAgent.definition.id);
 
     const subResults = await this.handleDelegation(result, ideSnapshot, emit);

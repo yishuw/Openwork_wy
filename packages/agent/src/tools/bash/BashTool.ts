@@ -41,7 +41,7 @@ export class BashTool implements ITool {
   readonly annotations = annotations;
 
   async execute(params: Record<string, string>, context: ToolExecutionContext): Promise<string> {
-    const command = params.command.trim();
+    const command = (params.command || '').trim();
     if (!command) return 'Error: No command provided';
 
     const timeout = this.resolveTimeout(params.timeout);
