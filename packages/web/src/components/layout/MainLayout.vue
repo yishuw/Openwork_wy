@@ -87,6 +87,9 @@
           </n-tab-pane>
         </n-tabs>
         <div class="editor-container">
+          <div v-if="store.activeTab" class="editor-debug-hint">
+            {{ store.activeTab.name }} · {{ store.activeTab.viewMode }} · {{ store.activeTab.content?.length || 0 }} chars
+          </div>
           <ImageViewer
             v-if="store.activeTab && store.activeTab.viewMode === 'image'"
             :src="store.activeTab.content"
@@ -1210,13 +1213,19 @@ function startRightPanelResize(e: MouseEvent) {
   background: var(--surface-2);
 }
 .editor-tabs {
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  height: auto;
+  max-height: 48px;
+  overflow: hidden;
   user-select: none;
   background: var(--surface-1);
   border-bottom: 1px solid var(--border-subtle);
 }
-.editor-tabs :deep(.n-tabs-pane-wrapper) {
+.editor-tabs :deep(.n-tabs-pane-wrapper),
+.editor-tabs :deep(.n-tabs-content) {
   display: none;
+  height: 0;
+  overflow: hidden;
 }
 .editor-tabs :deep(.n-tabs-nav) {
   background: var(--surface-1);
@@ -1267,9 +1276,22 @@ function startRightPanelResize(e: MouseEvent) {
   line-height: 0;
   vertical-align: middle;
 }
+.editor-debug-hint {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 5;
+  padding: 2px 8px;
+  font-size: 10px;
+  color: var(--text-muted, #888);
+  background: rgba(0,0,0,0.35);
+  pointer-events: none;
+  border-radius: 0 0 0 6px;
+}
 .editor-container {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 200px;
+  height: 0;
   overflow: hidden;
   position: relative;
 }

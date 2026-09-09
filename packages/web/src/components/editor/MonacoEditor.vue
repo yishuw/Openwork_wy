@@ -169,6 +169,10 @@ onMounted(() => {
     // 注册到编辑器单例，供其他组件访问
     setEditorInstance(editor);
     emit('editor-ready', editor);
+    // 容器刚挂载时尺寸可能为 0，强制再 layout 一次
+    requestAnimationFrame(() => {
+      try { editor?.layout(); } catch { /* ignore */ }
+    });
   } catch (e) {
     console.error('[MonacoEditor] create failed', e);
   }
@@ -179,13 +183,15 @@ watch(() => props.language, (lang) => {
   if (editor) {
     const model = editor.getModel();
     if (model) monaco.editor.setModelLanguage(model, lang);
+    editor.layout();
   }
 });
 
 // 外部内容变更：同步到编辑器（仅在值不同时，避免循环更新）
 watch(() => props.content, (val) => {
   if (editor && val !== editor.getValue()) {
-    editor.setValue(val);
+    editor.setValue(val ?? '');
+    editor.layout();
   }
 });
 
