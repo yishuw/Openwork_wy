@@ -823,10 +823,8 @@ export class Agent {
       }
 
       fullContent += response;
-      if (fullContent.length > 50000) {
-        emit({ type: 'chunk', text: '\n\n*[响应过长，已截断]*' });
-        fullContent += '\n\n*[响应过长，已截断]*';
-      }
+      // 不再向用户展示「响应过长已截断」——该提示曾误伤正常回复；
+      // 内存/落盘侧由 SessionMemory token 滑窗与 maxTurns 控制。
       log.info(`Turn ${turns}/${maxTurns}: final response, ${response.length} chars, ${Date.now() - turnStartMs}ms`, {
         ...this.logBaseMeta(),
         turn: turns,

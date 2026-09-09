@@ -138,18 +138,28 @@ async function createNewSession() {
   await sessionStore.createSession();
 }
 
-// ===== 自动滚动 =====
+// ===== 自动滚动（用户上翻时不打断）=====
 const messagesContainer = ref<HTMLElement>();
 let scrollRafId = 0;
+/** 距底部多少像素内视为「贴底」，才继续自动滚动 */
+const NEAR_BOTTOM_PX = 80;
+
+function isNearBottom(): boolean {
+  const el = messagesContainer.value;
+  if (!el) return true;
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
+}
 
 function scrollToBottom() {
   const el = messagesContainer.value;
   if (el) el.scrollTop = el.scrollHeight;
 }
 
-function scheduleScroll(_force = false) {
+function scheduleScroll(force = false) {
   cancelAnimationFrame(scrollRafId);
-  scrollRafId = requestAnimationFrame(() => scrollToBottom());
+  scrollRafId = requestAnimationFrame(() => {
+    if (force || isNearBottom()) scrollToBottom();
+  });
 }
 
 onMounted(() => {
@@ -214,7 +224,8 @@ async function send() {
           pendingUserMessage.value = null;
           agentCtrl.clearLive();
         }
-        scrollToBottom();
+        // 仅贴底时才跟滚，用户上翻阅读时不拉回底部
+        scheduleScroll(false);
       },
       onError: (err) => {
         webAgentLog.error(`send(B): streamMessage failed: ${err.message}`, { name: err.name, message: err.message });
@@ -223,7 +234,8 @@ async function send() {
   );
 
   await nextTick();
-  scrollToBottom();
+  // 用户主动发送时强制滚到底
+  scheduleScroll(true);
 
   try {
     await streamPromise;
