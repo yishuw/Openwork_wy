@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import * as monaco from 'monaco-editor';
-import 'monaco-editor/esm/vs/editor/editor.main.css';
+import 'monaco-editor/min/vs/editor/editor.main.css';
 import { setEditorInstance, clearEditorInstance } from '../../services/editorInstance';
 import { useSettingsStore, type Theme } from '../../stores/settings';
 
