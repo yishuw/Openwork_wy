@@ -19,6 +19,17 @@ export interface AgentConfig {
   temperature?: number;
   maxTokens?: number;
   memoryTokenBudget?: number;
+  /** 权限模式；桌面默认 auto-edit（写文件自动，bash 需确认） */
+  permissionMode?: 'suggest' | 'auto-edit' | 'full-auto';
+  toolProtocol?: 'xml' | 'fc' | 'auto';
+}
+
+/** 服务端推来的待确认请求 */
+export interface ApprovalRequiredEvent {
+  approvalId: string;
+  toolName: string;
+  label: string;
+  mode: string;
 }
 
 /** 对话消息 */
@@ -56,7 +67,20 @@ export interface StreamRequestBody {
 }
 
 export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
+  async function sendApproval(approvalId: string, decision: 'allow' | 'deny'): Promise<void> {
+    const res = await fetch(`${baseUrl}/api/agent/approval`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approvalId, decision }),
+    });
+    if (!res.ok) {
+      webAgentLog.error(`sendApproval failed: ${res.status}`);
+    }
+  }
+
   return {
+    sendApproval,
+
     async sendMessage(
       message: string,
       body: Partial<StreamRequestBody>,
@@ -85,7 +109,11 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
       config: AgentConfig,
       onChunk: (type: 'thinking' | 'content', text: string) => void,
       onEvent?: (event: StreamEvent) => void,
-      options?: { signal?: AbortSignal },
+      options?: {
+        signal?: AbortSignal;
+        /** 收到服务端 approval_required 时回调（异步允许/拒绝） */
+        onApprovalRequired?: (req: ApprovalRequiredEvent) => Promise<'allow' | 'deny'> | 'allow' | 'deny';
+      },
     ): Promise<AgentMessage> {
       const fullBody: StreamRequestBody = {
         message,
@@ -135,6 +163,13 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
             if (data.done) {
               streamDone = true;
               break;
+            }
+
+            if (data.approval_required && options?.onApprovalRequired) {
+              const req = data.approval_required as ApprovalRequiredEvent;
+              const decision = await options.onApprovalRequired(req);
+              await sendApproval(req.approvalId, decision);
+              continue;
             }
 
             if (data.tool_start && onEvent) {

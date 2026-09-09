@@ -15,6 +15,7 @@ import {
   requiresApproval,
   buildApprovalLabel,
   defaultDecision,
+  nextApprovalId,
   DEFAULT_PERMISSION_MODE,
   type Approver,
   type PermissionMode,
@@ -109,7 +110,7 @@ export class Agent {
   private readonly modelLabel: string;
   private readonly requestedToolProtocol: NonNullable<AgentConfig['toolProtocol']>;
   private readonly modelCapabilities?: ModelCapabilities | null;
-  private readonly permissionMode: PermissionMode;
+  private permissionMode: PermissionMode;
   private readonly approver?: Approver;
   /** 运行时实际协议；连续失败后变为 fallback_xml → 之后走 XML */
   private activeProtocol: 'xml' | 'fc' | 'fallback_xml';
@@ -230,6 +231,15 @@ export class Agent {
     }
   }
 
+  /** 运行时切换权限模式（桌面设置 / 每请求覆盖） */
+  setPermissionMode(mode: PermissionMode): void {
+    this.permissionMode = resolvePermissionMode(mode);
+  }
+
+  getPermissionMode(): PermissionMode {
+    return this.permissionMode;
+  }
+
   private noteFcSuccess(): void {
     this.fcFailStreak = 0;
   }
@@ -250,6 +260,7 @@ export class Agent {
 
     const label = buildApprovalLabel(impl.name, params);
     const req: ApprovalRequest = {
+      approvalId: nextApprovalId(),
       toolName: impl.name,
       params,
       label,

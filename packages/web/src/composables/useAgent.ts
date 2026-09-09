@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 import { createAgentService } from '../services/agentService';
-import type { AgentConfig, StreamEvent } from '../services/agentService';
+import type { AgentConfig, StreamEvent, ApprovalRequiredEvent } from '../services/agentService';
 import type { ProviderConfig } from './useLLMSettings';
 import type { IDESnapshot, DisplayMessage } from '@openwork/agent';
 import { useEditorStore } from '../stores/editor';
@@ -98,15 +98,31 @@ function collectFileTreePaths(entries: any[], basePath: string): string[] {
  */
 export function useAgent() {
   const isProcessing = ref(false);
-  const config = ref<AgentConfig>({ mode: 'build' });
+  /** 桌面默认 auto-edit：写文件自动，bash/destructive 需确认 */
+  const config = ref<AgentConfig>({ mode: 'build', permissionMode: 'auto-edit' });
   const service = createAgentService();
   const liveMessage = ref<DisplayMessage | null>(null);
   let activeAbortController: AbortController | null = null;
 
+  /** 也可由 UI 注入更精致的确认框 */
+  const defaultApprove = async (req: ApprovalRequiredEvent): Promise<'allow' | 'deny'> => {
+    const ok = typeof window !== 'undefined' && window.confirm(
+      `允许执行工具？\n\n${req.label}\n\n工具: ${req.toolName}`,
+    );
+    return ok ? 'allow' : 'deny';
+  };
+  let approveHandler: (req: ApprovalRequiredEvent) => Promise<'allow' | 'deny'> = defaultApprove;
+
+  function setApproveHandler(fn: typeof approveHandler) {
+    approveHandler = fn;
+  }
+
   function buildRequestConfig(provider?: ProviderConfig | null): AgentConfig {
     return {
+      mode: 'build',
       ...config.value,
       providerId: provider?.id || undefined,
+      permissionMode: config.value.permissionMode || 'auto-edit',
     };
   }
 
@@ -261,7 +277,7 @@ export function useAgent() {
             finishBlock();
           }
         },
-        { signal }
+        { signal, onApprovalRequired: (req) => approveHandler(req) },
       );
 
       // 流正常结束:让 UI 知道 live 消息即将被后端权威数据替代
@@ -314,5 +330,6 @@ export function useAgent() {
     cancelStream,
     clearLive,
     setMode,
+    setApproveHandler,
   };
 }

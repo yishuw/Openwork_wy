@@ -90,6 +90,8 @@ export {
   requiresApproval,
   defaultDecision,
   resolvePermissionMode,
+  nextApprovalId,
+  ApprovalBroker,
   type PermissionMode,
   type ApprovalDecision,
   type ApprovalRequest,

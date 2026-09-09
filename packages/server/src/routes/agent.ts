@@ -10,15 +10,15 @@ import { createLogger } from '@openwork/agent';
 import { loadEnabledMcpServers } from './mcp';
 import type { WorkspaceManager } from '../workspace/manager';
 import type { LLMGateway } from '@openwork/agent';
-import type { PermissionMode } from '@openwork/agent';
+import { approvalBroker, resolveRequestPermissionMode, handleApprovalDecision } from '../approval-broker';
 
 const log = createLogger('AgentRouter');
 
-/** 产品路径暂无交互 approver，默认放行写文件以兼容现有 UI；可用环境变量收紧 */
-function resolveProductPermissionMode(): PermissionMode {
-  const v = process.env.OPENWORK_PERMISSION_MODE?.toLowerCase();
-  if (v === 'suggest' || v === 'auto-edit' || v === 'full-auto') return v;
-  return 'full-auto';
+/** bash 工具开关:默认启用;OPENWORK_ENABLE_BASH=0/false 时关闭 */
+function resolveEnableBash(): boolean {
+  const v = process.env.OPENWORK_ENABLE_BASH;
+  if (v === undefined || v === '') return true;
+  return !(v === '0' || v.toLowerCase() === 'false');
 }
 
 function buildRuntimeConfig(body: Record<string, unknown>, configDir: string, llmGateway: LLMGateway, workspaceRoot?: string): AgentRuntimeConfig {
@@ -44,15 +44,12 @@ function buildRuntimeConfig(body: Record<string, unknown>, configDir: string, ll
     mcpServers: mode === 'build' ? loadEnabledMcpServers(configDir) : undefined,
     memoryTokenBudget: cfg.memoryTokenBudget ? Number(cfg.memoryTokenBudget) : undefined,
     enableBash: resolveEnableBash(),
-    permissionMode: resolveProductPermissionMode(),
+    permissionMode: resolveRequestPermissionMode(cfg.permissionMode),
+    toolProtocol: cfg.toolProtocol === 'fc' || cfg.toolProtocol === 'auto' || cfg.toolProtocol === 'xml'
+      ? cfg.toolProtocol
+      : undefined,
+    approver: approvalBroker.request,
   };
-}
-
-/** bash 工具开关:默认启用;OPENWORK_ENABLE_BASH=0/false 时关闭 */
-function resolveEnableBash(): boolean {
-  const v = process.env.OPENWORK_ENABLE_BASH;
-  if (v === undefined || v === '') return true;
-  return !(v === '0' || v.toLowerCase() === 'false');
 }
 
 interface StreamRequestBody {
@@ -121,6 +118,7 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
         const latestMcpServers = loadEnabledMcpServers(configDir);
         await runtime.reinitialize(latestMcpServers.length > 0 ? latestMcpServers : undefined);
       }
+      runtime.setPermissionMode(resolveRequestPermissionMode((req.body.config as any)?.permissionMode));
 
       // build 模式:走 ideSnapshot;plan 模式:走 context
       const payload = ideSnapshot ?? context;
@@ -166,6 +164,18 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
       res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
+    // 将本连接接到确认代理：pending 时把 approval_required 推给前端
+    const unsubscribeApproval = approvalBroker.subscribe((req) => {
+      writeSSE({
+        approval_required: {
+          approvalId: req.approvalId,
+          toolName: req.toolName,
+          label: req.label,
+          mode: req.mode,
+        },
+      });
+    });
+
     const runtime = await getRuntime(req.body, workspaceRoot);
     const startMs = Date.now();
 
@@ -177,6 +187,9 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
     const keepAlive = setInterval(() => { res.write(': heartbeat\n\n'); }, 15000);
 
     try {
+      // 每请求覆盖权限模式（前端设置 / 默认 auto-edit）
+      runtime.setPermissionMode(resolveRequestPermissionMode((body.config as any)?.permissionMode));
+
       const mcpStatus = runtime.mcpStatus;
       if (mcpStatus.serverCount > 0) {
         await runtime.initialize();
@@ -237,10 +250,25 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
       writeSSE({ done: true });
     } finally {
       clearInterval(keepAlive);
+      unsubscribeApproval();
       if (!body.workspaceId) {
         try { await runtime.dispose(); } catch { /* ignore */ }
       }
     }
+  });
+
+  /** 前端确认结果回传 */
+  router.post('/approval', (req: Request, res: Response) => {
+    const { approvalId, decision } = req.body as {
+      approvalId?: string;
+      decision?: string;
+    };
+    if (!approvalId || (decision !== 'allow' && decision !== 'deny')) {
+      res.status(400).json({ error: 'approvalId and decision (allow|deny) required' });
+      return;
+    }
+    const ok = handleApprovalDecision(approvalId, decision);
+    res.json({ success: ok });
   });
 
   return router;

@@ -12,6 +12,8 @@ export const DEFAULT_PERMISSION_MODE: PermissionMode = 'suggest';
 export type ApprovalDecision = 'allow' | 'deny';
 
 export interface ApprovalRequest {
+  /** 确认请求 ID，供前端回传 allow/deny */
+  approvalId: string;
   toolName: string;
   params: Record<string, string>;
   /** 人类可读预览（大参数已截断） */
@@ -77,4 +79,68 @@ export function defaultDecision(mode: PermissionMode): ApprovalDecision {
 
 export function resolvePermissionMode(requested?: PermissionMode): PermissionMode {
   return requested || DEFAULT_PERMISSION_MODE;
+}
+
+let approvalSeq = 0;
+export function nextApprovalId(): string {
+  approvalSeq += 1;
+  return `apr_${Date.now().toString(36)}_${approvalSeq}`;
+}
+
+/**
+ * 进程内确认代理：Approver 阻塞等待 UI/HTTP 回传决策。
+ * 供 Server SSE / Electron 桥使用；CLI 用 readline Approver 不走这里。
+ */
+export class ApprovalBroker {
+  private pending = new Map<
+    string,
+    {
+      resolve: (d: ApprovalDecision) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  private listeners = new Set<(req: ApprovalRequest) => void>();
+
+  /** 作为 Approver 注入 AgentRuntime */
+  request = (req: ApprovalRequest): Promise<ApprovalDecision> => {
+    return new Promise<ApprovalDecision>((resolve) => {
+      const id = req.approvalId;
+      const timeoutMs = Number(process.env.OPENWORK_APPROVAL_TIMEOUT_MS) || 60_000;
+      const timer = setTimeout(() => {
+        this.finish(id, 'deny');
+      }, timeoutMs);
+      this.pending.set(id, { resolve, timer });
+      for (const l of this.listeners) {
+        try {
+          l(req);
+        } catch {
+          /* ignore listener errors */
+        }
+      }
+    });
+  };
+
+  subscribe(listener: (req: ApprovalRequest) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  resolve(approvalId: string, decision: ApprovalDecision): boolean {
+    return this.finish(approvalId, decision);
+  }
+
+  private finish(id: string, decision: ApprovalDecision): boolean {
+    const p = this.pending.get(id);
+    if (!p) return false;
+    clearTimeout(p.timer);
+    this.pending.delete(id);
+    p.resolve(decision);
+    return true;
+  }
+
+  get pendingCount(): number {
+    return this.pending.size;
+  }
 }

@@ -47,6 +47,14 @@ export class Session {
     this.subAgents.set(agent.definition.id, agent);
   }
 
+  /** 同步权限模式到主/子 Agent */
+  setPermissionMode(mode: import('./permission').PermissionMode): void {
+    this.mainAgent.setPermissionMode(mode);
+    for (const sub of this.subAgents.values()) {
+      sub.setPermissionMode(mode);
+    }
+  }
+
   /** 启动主 Agent 处理用户消息(非流式) */
   async start(
     message: string,

@@ -358,6 +358,15 @@ export class AgentRuntime {
     this.sessionMap.delete(sessionId);
   }
 
+  /** 每请求/设置变更时切换权限模式（影响后续工具闸门） */
+  setPermissionMode(mode: NonNullable<AgentRuntimeConfig['permissionMode']>): void {
+    this.config.permissionMode = mode;
+    this.agentConfig.permissionMode = mode;
+    for (const session of this.sessionMap.values()) {
+      session.setPermissionMode(mode);
+    }
+  }
+
   // ====================== 内部实现 ======================
 
   private createAgent(): Agent {
