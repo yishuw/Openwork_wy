@@ -34,6 +34,8 @@ export class Agent {
   private provider: ReturnType<typeof createOpenAILLMProvider>;
   private workspaceRoot: string;
   private tools: ToolRegistry;
+  /** 日志用模型名(展示/联调);不参与调用逻辑 */
+  private readonly modelLabel: string;
   /**
    * 本 Agent 会话内已 read 过的文件路径集合(规范化绝对路径)。
    * 由 FileReadTool 写入;FileEditTool / FileWriteTool 读取做前置校验。
@@ -44,6 +46,7 @@ export class Agent {
   constructor(definition: AgentDefinition, config: AgentConfig, workspaceRoot: string, extraTools?: ITool[]) {
     this.definition = definition;
     this.provider = createOpenAILLMProvider(config);
+    this.modelLabel = config.model || process.env.LLM_MODEL || 'unknown';
     this.workspaceRoot = workspaceRoot;
     this.tools = new ToolRegistry();
     for (const tool of createDefaultTools({ enableBash: config.enableBash })) {
@@ -85,6 +88,15 @@ export class Agent {
     return this.workspaceRoot;
   }
 
+  /** 工具协议日志字段。阶段 0 固定 xml;阶段 1 切 FC 后改为 fc / fallback_xml。 */
+  private logBaseMeta(): Record<string, unknown> {
+    return {
+      protocol: 'xml',
+      agentId: this.definition.id,
+      model: this.modelLabel,
+    };
+  }
+
   /**
    * 执行单次对话，自动多轮 + 工具调用。
    *
@@ -117,7 +129,12 @@ export class Agent {
 
       if (!response) {
         emit({ type: 'done' });
-        log.info(`Turn ${turns}/${maxTurns}: empty response, stopping`);
+        log.info(`Turn ${turns}/${maxTurns}: empty response, stopping`, {
+          ...this.logBaseMeta(),
+          turn: turns,
+          maxTurns,
+          finishReason: 'empty',
+        });
         break;
       }
 
@@ -166,10 +183,12 @@ export class Agent {
         }
 
         log.info(`Turn ${turns}/${maxTurns}: ${parsedTools.length} tool(s), ${Date.now() - turnStartMs}ms`, {
-          agentId: this.definition.id,
+          ...this.logBaseMeta(),
           turn: turns,
-          tools: parsedTools.map(t => t.type),
+          maxTurns,
+          toolNames: parsedTools.map(t => t.type),
           messages: localMessages.length,
+          finishReason: 'tool_calls',
         });
 
         continue;
@@ -179,15 +198,17 @@ export class Agent {
       fullContent += response;
       emit({ type: 'done' });
       log.info(`Turn ${turns}/${maxTurns}: final response, ${response.length} chars, ${Date.now() - turnStartMs}ms`, {
-        agentId: this.definition.id,
+        ...this.logBaseMeta(),
         turn: turns,
+        maxTurns,
         contentLen: response.length,
+        finishReason: 'stop',
       });
       break;
     }
 
     log.info(`execute done: ${fullContent.length} chars, ${turns} turns, ${toolCalls.length} tool calls, ${Date.now() - executeStartMs}ms`, {
-      agentId: this.definition.id,
+      ...this.logBaseMeta(),
       contentLen: fullContent.length,
       turns,
       toolCalls: toolCalls.length,
@@ -221,7 +242,12 @@ export class Agent {
     for (let turn = 0; turn < maxTurns; turn++) {
       if (signal?.aborted) {
         emit({ type: 'done' });
-        log.info(`Turn ${turns}/${maxTurns}: aborted by signal`);
+        log.info(`Turn ${turns}/${maxTurns}: aborted by signal`, {
+          ...this.logBaseMeta(),
+          turn: turns,
+          maxTurns,
+          finishReason: 'aborted',
+        });
         break;
       }
       turns = turn + 1;
@@ -244,7 +270,12 @@ export class Agent {
 
       if (!response) {
         emit({ type: 'done' });
-        log.info(`Turn ${turns}/${maxTurns}: empty stream response, stopping`);
+        log.info(`Turn ${turns}/${maxTurns}: empty stream response, stopping`, {
+          ...this.logBaseMeta(),
+          turn: turns,
+          maxTurns,
+          finishReason: 'empty',
+        });
         break;
       }
 
@@ -279,10 +310,12 @@ export class Agent {
         }
 
         log.info(`Turn ${turns}/${maxTurns}: ${parsedTools.length} tool(s), ${Date.now() - turnStartMs}ms`, {
-          agentId: this.definition.id,
+          ...this.logBaseMeta(),
           turn: turns,
-          tools: parsedTools.map(t => t.type),
+          maxTurns,
+          toolNames: parsedTools.map(t => t.type),
           messages: localMessages.length,
+          finishReason: 'tool_calls',
         });
 
         continue;
@@ -294,16 +327,18 @@ export class Agent {
         fullContent += '\n\n*[响应过长，已截断]*';
       }
       log.info(`Turn ${turns}/${maxTurns}: final response, ${response.length} chars, ${Date.now() - turnStartMs}ms`, {
-        agentId: this.definition.id,
+        ...this.logBaseMeta(),
         turn: turns,
+        maxTurns,
         contentLen: response.length,
+        finishReason: 'stop',
       });
       emit({ type: 'done' });
       break;
     }
 
     log.info(`executeStream done: ${fullContent.length} chars, thinking=${thinkingContent.length} chars, turns=${turns}, ${toolCalls.length} tool calls, ${Date.now() - executeStartMs}ms`, {
-      agentId: this.definition.id,
+      ...this.logBaseMeta(),
       contentLen: fullContent.length,
       thinkingLen: thinkingContent.length,
       turns,
@@ -329,14 +364,22 @@ export class Agent {
       .filter(([, v]) => v)
       .map(([k, v]) => `${k}=${v.length > 60 ? v.slice(0, 60) + '...' : v}`)
       .join(', ');
-    log.info(`Tool call: ${tool.type}${keyParams ? ` (${keyParams})` : ''}`);
+    log.info(`Tool call: ${tool.type}${keyParams ? ` (${keyParams})` : ''}`, {
+      ...this.logBaseMeta(),
+      toolName: tool.type,
+    });
     const startMs = Date.now();
     const result = await impl.execute(tool.params, {
       workspaceRoot: this.workspaceRoot,
       readFileState: this.readFileState,
     });
     const durationMs = Date.now() - startMs;
-    log.info(`Tool done: ${tool.type} (${durationMs}ms, ${result.length} chars)`);
+    log.info(`Tool done: ${tool.type} (${durationMs}ms, ${result.length} chars)`, {
+      ...this.logBaseMeta(),
+      toolName: tool.type,
+      durationMs,
+      resultLen: result.length,
+    });
     return { result, durationMs };
   }
 

@@ -111,9 +111,11 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
         });
         const content = (response.choices[0]?.message?.content as string) || '';
         const usage = response.usage;
+        const finishReason = response.choices[0]?.finish_reason ?? 'unknown';
         log.info(`chat done: ${content.length} chars, ${Date.now() - startMs}ms`, {
           model: resolved.model,
           contentLen: content.length,
+          finishReason,
           usage: usage ? { prompt: usage.prompt_tokens, completion: usage.completion_tokens, total: usage.total_tokens } : undefined,
         });
         return content;
@@ -140,8 +142,11 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
         });
 
         let fullContent = '';
+        let finishReason: string | undefined;
         for await (const chunk of stream) {
-          const delta = (chunk.choices[0]?.delta as Record<string, unknown>) ?? {};
+          const choice = chunk.choices?.[0];
+          if (choice?.finish_reason) finishReason = choice.finish_reason;
+          const delta = (choice?.delta as Record<string, unknown>) ?? {};
           if (delta.reasoning_content) {
             onChunk('thinking', String(delta.reasoning_content));
           }
@@ -153,6 +158,7 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
         log.info(`chatStream done: ${fullContent.length} chars, ${Date.now() - startMs}ms`, {
           model: resolved.model,
           contentLen: fullContent.length,
+          finishReason: finishReason || 'unknown',
         });
         return fullContent;
       } catch (e: any) {
