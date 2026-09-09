@@ -155,6 +155,7 @@ export default {
     renamePrompt: '重命名',
     newFilePrompt: '新文件名称',
     newFolderPrompt: '新文件夹名称',
+    fileTooLarge: '文件过大（约 {size} KB），超过 {limit} KB 上限，已拒绝打开以免卡死界面',
   },
   contextMenu: {
     open: '打开',

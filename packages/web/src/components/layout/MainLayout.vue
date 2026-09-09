@@ -71,6 +71,7 @@
           closable
           tab-style="min-width: 80px; user-select: none;"
           class="editor-tabs"
+          :pane-style="{ padding: 0, height: '0', overflow: 'hidden' }"
           @close="handleTabClose"
         >
           <n-tab-pane
@@ -88,13 +89,11 @@
         <div class="editor-container">
           <ImageViewer
             v-if="store.activeTab && store.activeTab.viewMode === 'image'"
-            :key="store.activeTab.id"
             :src="store.activeTab.content"
             :filename="store.activeTab.name"
           />
           <MonacoEditor
             v-else-if="store.activeTab && store.activeTab.viewMode === 'code'"
-            :key="store.activeTab.id"
             :content="store.activeTab.content"
             :language="store.activeTab.language"
             @content-change="(c: string) => store.updateContent(store.activeTab!.id, c)"
@@ -121,14 +120,12 @@
           />
           <HtmlViewer
             v-else-if="store.activeTab && store.activeTab.viewMode === 'html'"
-            :key="store.activeTab.id"
             :content="store.activeTab.content"
             :language="store.activeTab.language"
             @content-change="(c: string) => store.updateContent(store.activeTab!.id, c)"
           />
           <MarkdownViewer
             v-else-if="store.activeTab && store.activeTab.viewMode === 'markdown'"
-            :key="store.activeTab.id"
             :content="store.activeTab.content"
             :language="store.activeTab.language"
             @content-change="(c: string) => store.updateContent(store.activeTab!.id, c)"
@@ -1272,7 +1269,9 @@ function startRightPanelResize(e: MouseEvent) {
 }
 .editor-container {
   flex: 1;
+  min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 .editor-placeholder {
   display: flex;

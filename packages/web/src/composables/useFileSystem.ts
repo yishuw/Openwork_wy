@@ -126,6 +126,11 @@ export function useFileSystem() {
     return `data:${mime};base64,${arrayBufferToBase64(buffer)}`;
   }
 
+  /** 文本打开上限：超过则拒绝，避免 Monaco 卡死整个渲染进程 */
+  const MAX_TEXT_OPEN_BYTES = 2 * 1024 * 1024;
+  /** 二进制/办公文档打开上限 */
+  const MAX_BINARY_OPEN_BYTES = 20 * 1024 * 1024;
+
   /** 读取文件并在编辑器中打开为标签页 */
   async function openAndReadFile(filePath: string) {
     isLoading.value = true;
@@ -134,6 +139,23 @@ export function useFileSystem() {
       const ext = filePath.split('.').pop()?.toLowerCase() || '';
       const viewMode = getViewModeFromPath(filePath);
       const client = getClient();
+
+      // 先探测大小，过大直接拒绝，防止卡死 UI
+      try {
+        const st = await client.stat?.(filePath);
+        const size = st?.size;
+        if (typeof size === 'number') {
+          const limit = viewMode === 'code' || viewMode === 'markdown' || viewMode === 'html'
+            ? MAX_TEXT_OPEN_BYTES
+            : MAX_BINARY_OPEN_BYTES;
+          if (size > limit) {
+            error.value = t('fileTree.fileTooLarge', { size: Math.round(size / 1024), limit: Math.round(limit / 1024) });
+            return;
+          }
+        }
+      } catch {
+        /* stat 失败则继续尝试打开 */
+      }
 
       if (viewMode === 'image') {
         const buffer = await client.readFileBuffer(filePath);
@@ -155,10 +177,15 @@ export function useFileSystem() {
         store.openFile(filePath, '');
       } else {
         const content = await client.readFile(filePath);
+        if (content.length > MAX_TEXT_OPEN_BYTES) {
+          error.value = t('fileTree.fileTooLarge', { size: Math.round(content.length / 1024), limit: Math.round(MAX_TEXT_OPEN_BYTES / 1024) });
+          return;
+        }
         store.openFile(filePath, content);
       }
     } catch (e: any) {
       error.value = e.message;
+      console.error('[openAndReadFile]', filePath, e);
     } finally {
       isLoading.value = false;
     }

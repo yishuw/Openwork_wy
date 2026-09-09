@@ -135,13 +135,14 @@ function getEditorThemeName(theme: Theme): string {
 onMounted(() => {
   if (!editorContainer.value) return;
 
-  defineEditorThemes();
+  try {
+    defineEditorThemes();
 
   const monacoTheme = getEditorThemeName(settings.theme);
 
   // 创建 Monaco 编辑器实例
   editor = monaco.editor.create(editorContainer.value, {
-    value: props.content,
+    value: props.content ?? '',
     language: props.language,
     readOnly: props.readOnly ?? false,
     theme: monacoTheme,
@@ -160,14 +161,17 @@ onMounted(() => {
     cursorSmoothCaretAnimation: 'on',
   });
 
-  // 内容变更时通知父组件
-  editor.onDidChangeModelContent(() => {
-    emit('content-change', editor!.getValue());
-  });
+    // 内容变更时通知父组件
+    editor.onDidChangeModelContent(() => {
+      if (editor) emit('content-change', editor.getValue());
+    });
 
-  // 注册到编辑器单例，供其他组件访问
-  setEditorInstance(editor);
-  emit('editor-ready', editor);
+    // 注册到编辑器单例，供其他组件访问
+    setEditorInstance(editor);
+    emit('editor-ready', editor);
+  } catch (e) {
+    console.error('[MonacoEditor] create failed', e);
+  }
 });
 
 // 语言切换：动态更新 Monaco 模型的语言模式

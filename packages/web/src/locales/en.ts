@@ -155,6 +155,7 @@ export default {
     renamePrompt: 'Rename',
     newFilePrompt: 'New file name',
     newFolderPrompt: 'New folder name',
+    fileTooLarge: 'File too large (~{size} KB, limit {limit} KB). Open skipped to avoid freezing the UI.',
   },
   contextMenu: {
     open: 'Open',
