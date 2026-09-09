@@ -3,8 +3,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import * as monaco from 'monaco-editor';
+import 'monaco-editor/esm/vs/editor/editor.main.css';
 import { setEditorInstance, clearEditorInstance } from '../../services/editorInstance';
 import { useSettingsStore, type Theme } from '../../stores/settings';
 
@@ -39,6 +40,16 @@ const emit = defineEmits<{
 
 const editorContainer = ref<HTMLElement>();
 let editor: monaco.editor.IStandaloneCodeEditor | null = null;
+let resizeObserver: ResizeObserver | null = null;
+
+function forceLayout() {
+  if (!editor) return;
+  try {
+    editor.layout();
+  } catch {
+    /* ignore */
+  }
+}
 
 const EDITOR_THEME_NAMES: Record<Theme, string> = {
   dark: 'openwork-dark',
@@ -169,10 +180,21 @@ onMounted(() => {
     // 注册到编辑器单例，供其他组件访问
     setEditorInstance(editor);
     emit('editor-ready', editor);
-    // 容器刚挂载时尺寸可能为 0，强制再 layout 一次
-    requestAnimationFrame(() => {
-      try { editor?.layout(); } catch { /* ignore */ }
+
+    // 容器尺寸在挂载后才稳定；多帧强制 layout
+    void nextTick(() => {
+      forceLayout();
+      requestAnimationFrame(() => {
+        forceLayout();
+        setTimeout(forceLayout, 50);
+        setTimeout(forceLayout, 200);
+      });
     });
+
+    if (typeof ResizeObserver !== 'undefined' && editorContainer.value) {
+      resizeObserver = new ResizeObserver(() => forceLayout());
+      resizeObserver.observe(editorContainer.value);
+    }
   } catch (e) {
     console.error('[MonacoEditor] create failed', e);
   }
@@ -203,6 +225,8 @@ watch(() => settings.theme, (t) => {
 });
 
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  resizeObserver = null;
   // 仅当全局单例仍是本实例时才 dispose，避免关闭无关 Tab 时销毁正在使用的编辑器
   clearEditorInstance(editor);
 });
@@ -210,7 +234,10 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .monaco-editor-wrapper {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 </style>
