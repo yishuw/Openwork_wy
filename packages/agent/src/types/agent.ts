@@ -52,6 +52,8 @@ export interface AgentResult {
   /** 流式期间累积的 thinking 文本(reasoning models) */
   thinking?: string;
   error?: string;
+  /** 本轮停止原因（maxTurns / 取消 / 正常收尾等） */
+  stopReason?: 'stop' | 'max_turns' | 'aborted' | 'empty' | 'error';
 }
 
 /** 会话消息 —— 记录每条消息来源 Agent */

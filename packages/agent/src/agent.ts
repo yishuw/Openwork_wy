@@ -32,11 +32,23 @@ export type AgentEventCallback = (event: AgentEvent) => void;
 /** 工具调用回调 — Agent 每完成一次工具调用通过此回调上报给 Session 写入 memory */
 export type ToolCallReportCallback = (toolCall: ToolCallRecord) => void;
 
-const DEFAULT_MAX_TURNS = Infinity;
-/** FC 路径临时硬上限，防模型无限 tool_calls（Phase 2 再产品化 maxTurns） */
-const FC_HARD_MAX_TURNS = 20;
+/** 默认单次 execute 最大 LLM 轮次（XML / FC 共用） */
+export const DEFAULT_AGENT_MAX_TURNS = 20;
+/** 用户可配 maxTurns 的绝对上限，防配置写爆 */
+export const ABSOLUTE_MAX_TURNS = 50;
 /** 连续 FC 调用失败次数达到该值后，本 Agent 降级为 XML */
 const FC_FALLBACK_FAILURE_THRESHOLD = 2;
+
+/** 解析本轮 maxTurns：非法值回退默认，且不超过绝对上限 */
+export function resolveMaxTurns(requested?: number): number {
+  const n = requested;
+  if (n === undefined || n === null || !Number.isFinite(n) || n <= 0) {
+    return DEFAULT_AGENT_MAX_TURNS;
+  }
+  return Math.min(Math.floor(n), ABSOLUTE_MAX_TURNS);
+}
+
+const MAX_TURNS_NOTE = (n: number) => `\n\n*[已达到最大轮次 ${n}，已停止]*`;
 
 /** Agent 构造可选覆盖（测试注入 mock provider / 强制协议） */
 export interface AgentOverrides {
@@ -204,7 +216,7 @@ export class Agent {
       return this.executeWithFunctionCalling(messages, onEvent, onToolCall);
     }
     const emit = (e: AgentEvent) => onEvent?.(e);
-    const maxTurns = this.definition.maxTurns ?? DEFAULT_MAX_TURNS;
+    const maxTurns = resolveMaxTurns(this.definition.maxTurns);
 
     // Agent 内部维护一份本地 messages(含本轮工具往返)
     // 入参 messages 是 read-only,这里 clone 一份用于本轮追加
@@ -214,6 +226,8 @@ export class Agent {
     let fullContent = '';
     const toolCalls: { type: string; params: Record<string, string> }[] = [];
     let turns = 0;
+    let stopReason: NonNullable<AgentResult['stopReason']> = 'stop';
+    let exitedEarly = false;
 
     for (let turn = 0; turn < maxTurns; turn++) {
       turns = turn + 1;
@@ -222,6 +236,8 @@ export class Agent {
 
       if (!response) {
         emit({ type: 'done' });
+        stopReason = 'empty';
+        exitedEarly = true;
         log.info(`Turn ${turns}/${maxTurns}: empty response, stopping`, {
           ...this.logBaseMeta(),
           turn: turns,
@@ -290,6 +306,8 @@ export class Agent {
       emit({ type: 'chunk', text: response });
       fullContent += response;
       emit({ type: 'done' });
+      stopReason = 'stop';
+      exitedEarly = true;
       log.info(`Turn ${turns}/${maxTurns}: final response, ${response.length} chars, ${Date.now() - turnStartMs}ms`, {
         ...this.logBaseMeta(),
         turn: turns,
@@ -300,17 +318,33 @@ export class Agent {
       break;
     }
 
+    if (!exitedEarly) {
+      stopReason = 'max_turns';
+      const note = MAX_TURNS_NOTE(maxTurns);
+      fullContent += note;
+      emit({ type: 'chunk', text: note });
+      emit({ type: 'done' });
+      log.info(`execute stopped at maxTurns=${maxTurns}`, {
+        ...this.logBaseMeta(),
+        turns,
+        maxTurns,
+        finishReason: 'max_turns',
+      });
+    }
+
     log.info(`execute done: ${fullContent.length} chars, ${turns} turns, ${toolCalls.length} tool calls, ${Date.now() - executeStartMs}ms`, {
       ...this.logBaseMeta(),
       contentLen: fullContent.length,
       turns,
       toolCalls: toolCalls.length,
+      stopReason,
     });
     return {
       agentId: this.definition.id,
       content: fullContent,
       turns,
       toolCalls,
+      stopReason,
     };
   }
 
@@ -326,10 +360,7 @@ export class Agent {
     const emit = (e: AgentEvent) => onEvent?.(e);
     const chatWithTools = this.provider.chatWithTools!;
     const openAiTools: OpenAIFunctionDefinition[] = this.tools.listOpenAITools();
-    const maxTurns = Math.min(
-      this.definition.maxTurns ?? FC_HARD_MAX_TURNS,
-      FC_HARD_MAX_TURNS,
-    );
+    const maxTurns = resolveMaxTurns(this.definition.maxTurns);
 
     const localMessages: LLMChatMessage[] = messages.map((m) => ({
       role: m.role,
@@ -340,6 +371,8 @@ export class Agent {
     let fullContent = '';
     const toolCalls: { type: string; params: Record<string, string> }[] = [];
     let turns = 0;
+    let stopReason: NonNullable<AgentResult['stopReason']> = 'stop';
+    let exitedEarly = false;
 
     for (let turn = 0; turn < maxTurns; turn++) {
       turns = turn + 1;
@@ -366,6 +399,8 @@ export class Agent {
 
       if (result.toolCalls.length === 0) {
         emit({ type: 'done' });
+        stopReason = 'stop';
+        exitedEarly = true;
         log.info(`Turn ${turns}/${maxTurns}: final response, ${result.content.length} chars, ${Date.now() - turnStartMs}ms`, {
           ...this.logBaseMeta('fc'),
           turn: turns,
@@ -451,11 +486,26 @@ export class Agent {
       });
     }
 
+    if (!exitedEarly) {
+      stopReason = 'max_turns';
+      const note = MAX_TURNS_NOTE(maxTurns);
+      fullContent += note;
+      emit({ type: 'chunk', text: note });
+      emit({ type: 'done' });
+      log.info(`execute(FC) stopped at maxTurns=${maxTurns}`, {
+        ...this.logBaseMeta('fc'),
+        turns,
+        maxTurns,
+        finishReason: 'max_turns',
+      });
+    }
+
     log.info(`execute(FC) done: ${fullContent.length} chars, ${turns} turns, ${toolCalls.length} tool calls, ${Date.now() - executeStartMs}ms`, {
       ...this.logBaseMeta('fc'),
       contentLen: fullContent.length,
       turns,
       toolCalls: toolCalls.length,
+      stopReason,
     });
 
     return {
@@ -463,6 +513,7 @@ export class Agent {
       content: fullContent,
       turns,
       toolCalls,
+      stopReason,
     };
   }
 
@@ -480,7 +531,7 @@ export class Agent {
       return this.executeStreamWithFunctionCalling(messages, onEvent, onToolCall, signal);
     }
     const emit = (e: AgentEvent) => onEvent?.(e);
-    const maxTurns = this.definition.maxTurns ?? DEFAULT_MAX_TURNS;
+    const maxTurns = resolveMaxTurns(this.definition.maxTurns);
 
     const localMessages: { role: string; content: string }[] = messages.map(m => ({ ...m }));
 
@@ -489,10 +540,16 @@ export class Agent {
     let thinkingContent = '';
     const toolCalls: { type: string; params: Record<string, string> }[] = [];
     let turns = 0;
+    let stopReason: NonNullable<AgentResult['stopReason']> = 'stop';
+    let exitedEarly = false;
 
     for (let turn = 0; turn < maxTurns; turn++) {
       if (signal?.aborted) {
         emit({ type: 'done' });
+        stopReason = 'aborted';
+        exitedEarly = true;
+        const abortNote = '\n\n*[已取消]*';
+        fullContent += abortNote;
         log.info(`Turn ${turns}/${maxTurns}: aborted by signal`, {
           ...this.logBaseMeta(),
           turn: turns,
@@ -521,6 +578,8 @@ export class Agent {
 
       if (!response) {
         emit({ type: 'done' });
+        stopReason = 'empty';
+        exitedEarly = true;
         log.info(`Turn ${turns}/${maxTurns}: empty stream response, stopping`, {
           ...this.logBaseMeta(),
           turn: turns,
@@ -584,8 +643,24 @@ export class Agent {
         contentLen: response.length,
         finishReason: 'stop',
       });
+      stopReason = 'stop';
+      exitedEarly = true;
       emit({ type: 'done' });
       break;
+    }
+
+    if (!exitedEarly) {
+      stopReason = 'max_turns';
+      const note = MAX_TURNS_NOTE(maxTurns);
+      fullContent += note;
+      emit({ type: 'chunk', text: note });
+      emit({ type: 'done' });
+      log.info(`executeStream stopped at maxTurns=${maxTurns}`, {
+        ...this.logBaseMeta(),
+        turns,
+        maxTurns,
+        finishReason: 'max_turns',
+      });
     }
 
     log.info(`executeStream done: ${fullContent.length} chars, thinking=${thinkingContent.length} chars, turns=${turns}, ${toolCalls.length} tool calls, ${Date.now() - executeStartMs}ms`, {
@@ -594,6 +669,7 @@ export class Agent {
       thinkingLen: thinkingContent.length,
       turns,
       toolCalls: toolCalls.length,
+      stopReason,
     });
     return {
       agentId: this.definition.id,
@@ -601,6 +677,7 @@ export class Agent {
       turns,
       toolCalls,
       thinking: thinkingContent,
+      stopReason,
     };
   }
 
@@ -614,10 +691,7 @@ export class Agent {
     const emit = (e: AgentEvent) => onEvent?.(e);
     const chatStreamWithTools = this.provider.chatStreamWithTools!;
     const openAiTools: OpenAIFunctionDefinition[] = this.tools.listOpenAITools();
-    const maxTurns = Math.min(
-      this.definition.maxTurns ?? FC_HARD_MAX_TURNS,
-      FC_HARD_MAX_TURNS,
-    );
+    const maxTurns = resolveMaxTurns(this.definition.maxTurns);
 
     const localMessages: LLMChatMessage[] = messages.map((m) => ({
       role: m.role,
@@ -629,10 +703,16 @@ export class Agent {
     let thinkingContent = '';
     const toolCalls: { type: string; params: Record<string, string> }[] = [];
     let turns = 0;
+    let stopReason: NonNullable<AgentResult['stopReason']> = 'stop';
+    let exitedEarly = false;
 
     for (let turn = 0; turn < maxTurns; turn++) {
       if (signal?.aborted) {
         emit({ type: 'done' });
+        stopReason = 'aborted';
+        exitedEarly = true;
+        const abortNote = '\n\n*[已取消]*';
+        fullContent += abortNote;
         log.info(`Turn ${turns}/${maxTurns}: aborted by signal`, {
           ...this.logBaseMeta('fc'),
           turn: turns,
@@ -668,6 +748,8 @@ export class Agent {
 
       if (result.toolCalls.length === 0) {
         emit({ type: 'done' });
+        stopReason = 'stop';
+        exitedEarly = true;
         log.info(
           `Turn ${turns}/${maxTurns}: final response, ${result.content.length} chars, ${Date.now() - turnStartMs}ms`,
           {
@@ -756,6 +838,20 @@ export class Agent {
       );
     }
 
+    if (!exitedEarly) {
+      stopReason = 'max_turns';
+      const note = MAX_TURNS_NOTE(maxTurns);
+      fullContent += note;
+      emit({ type: 'chunk', text: note });
+      emit({ type: 'done' });
+      log.info(`executeStream(FC) stopped at maxTurns=${maxTurns}`, {
+        ...this.logBaseMeta('fc'),
+        turns,
+        maxTurns,
+        finishReason: 'max_turns',
+      });
+    }
+
     log.info(
       `executeStream(FC) done: ${fullContent.length} chars, thinking=${thinkingContent.length}, turns=${turns}, ${toolCalls.length} tool calls, ${Date.now() - executeStartMs}ms`,
       {
@@ -764,6 +860,7 @@ export class Agent {
         thinkingLen: thinkingContent.length,
         turns,
         toolCalls: toolCalls.length,
+        stopReason,
       },
     );
 
@@ -773,6 +870,7 @@ export class Agent {
       turns,
       toolCalls,
       thinking: thinkingContent,
+      stopReason,
     };
   }
 

@@ -13,7 +13,14 @@ export {
   type ChatResult,
 } from './runtime';
 
-export { Agent, type AgentOverrides, type AgentEvent } from './agent';
+export {
+  Agent,
+  type AgentOverrides,
+  type AgentEvent,
+  DEFAULT_AGENT_MAX_TURNS,
+  ABSOLUTE_MAX_TURNS,
+  resolveMaxTurns,
+} from './agent';
 
 // -- 核心类型 --
 export type { AgentContext, AgentResult, SessionMessage } from './types/agent';
