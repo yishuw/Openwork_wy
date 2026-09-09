@@ -125,7 +125,11 @@ async function runAgentLoop(provider: ProviderConfig, mcpServers: McpServerEntry
   console.log(`🌐 API: ${provider.apiUrl}`);
   console.log(`🔧 Tools: 7 (built-in)${mcpStatus.serverCount ? ` + ${mcpStatus.serverCount} MCP server(s), ${mcpStatus.toolCount} tool(s)` : ''}`);
   console.log(`📁 Work dir: ${workDir}`);
-  console.log('Commands: /exit, /clear, /tools\n');
+  console.log('Commands: /exit, /clear, /tools');
+  console.log('Ctrl+C 取消当前对话（再按或 /exit 退出）\n');
+
+  let activeAbort: AbortController | null = null;
+  let cancelledThisTurn = false;
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -133,6 +137,22 @@ async function runAgentLoop(provider: ProviderConfig, mcpServers: McpServerEntry
     prompt: '\n🧑 You> ',
   });
   rl.prompt();
+
+  rl.on('SIGINT', () => {
+    if (activeAbort && !activeAbort.signal.aborted) {
+      cancelledThisTurn = true;
+      activeAbort.abort();
+      console.log('\n⏹ 已请求取消…（再按 Ctrl+C 或 /exit 退出）');
+      return;
+    }
+    if (cancelledThisTurn) {
+      console.log('\nBye.');
+      void runtime.dispose().finally(() => process.exit(0));
+      return;
+    }
+    // 空闲时 Ctrl+C：退出
+    void runtime.dispose().finally(() => process.exit(0));
+  });
 
   rl.on('line', async (line: string) => {
     const trimmed = line.trim();
@@ -160,6 +180,9 @@ async function runAgentLoop(provider: ProviderConfig, mcpServers: McpServerEntry
 
     process.stdout.write('\n🤖 AI> ');
     const startTime = Date.now();
+    cancelledThisTurn = false;
+    activeAbort = new AbortController();
+    const signal = activeAbort.signal;
 
     let thinking = false;
     const clearThinking = () => {
@@ -196,13 +219,23 @@ async function runAgentLoop(provider: ProviderConfig, mcpServers: McpServerEntry
             process.stdout.write(`\n❌ ${e.error || 'unknown error'}`);
             break;
         }
-      });
+      }, signal);
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       // 编辑已下沉为 agent 内建工具(FileWriteTool/FileEditTool),done 后无需再统计 edits。
-      console.log(`\n\n[${elapsed}s] | ${result.toolCalls.length} tool call(s)`);
+      if (signal.aborted) {
+        console.log(`\n\n[${elapsed}s] | 已取消`);
+      } else {
+        console.log(`\n\n[${elapsed}s] | ${result.toolCalls.length} tool call(s)`);
+      }
     } catch (e: any) {
-      console.log(`\n❌ Error: ${e.message}`);
+      if (e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')))) {
+        console.log(`\n⏹ 已取消`);
+      } else {
+        console.log(`\n❌ Error: ${e.message}`);
+      }
+    } finally {
+      activeAbort = null;
     }
 
     rl.prompt();

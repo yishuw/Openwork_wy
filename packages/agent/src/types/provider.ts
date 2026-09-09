@@ -38,19 +38,30 @@ export interface ChatWithToolsResult {
   finishReason: 'stop' | 'tool_calls' | 'length' | 'unknown';
 }
 
+/** LLM 调用公共选项（中断等） */
+export interface LLMCallOptions {
+  signal?: AbortSignal;
+}
+
 /** Agent 所需的 LLM 调用最小接口 */
 export interface ILLMProvider {
-  chat(messages: { role: string; content: string }[]): Promise<string>;
+  chat(messages: { role: string; content: string }[], options?: LLMCallOptions): Promise<string>;
   /** OpenAI tools 主路径；未实现则 Agent 回落 XML */
   chatWithTools?(
     messages: LLMChatMessage[],
     tools: OpenAIFunctionDefinition[],
+    options?: LLMCallOptions,
   ): Promise<ChatWithToolsResult>;
   /** 流式 + tools；onChunk 仍只收 thinking/content，tool_calls 在返回值中 */
   chatStreamWithTools?(
     messages: LLMChatMessage[],
     tools: OpenAIFunctionDefinition[],
     onChunk: (type: 'thinking' | 'content', text: string) => void,
+    options?: LLMCallOptions,
   ): Promise<ChatWithToolsResult>;
-  chatStream(messages: { role: string; content: string }[], onChunk: (type: 'thinking' | 'content', text: string) => void): Promise<string>;
+  chatStream(
+    messages: { role: string; content: string }[],
+    onChunk: (type: 'thinking' | 'content', text: string) => void,
+    options?: LLMCallOptions,
+  ): Promise<string>;
 }

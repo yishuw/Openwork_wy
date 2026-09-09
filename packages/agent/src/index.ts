@@ -20,6 +20,7 @@ export {
   DEFAULT_AGENT_MAX_TURNS,
   ABSOLUTE_MAX_TURNS,
   resolveMaxTurns,
+  isAbortError,
 } from './agent';
 
 // -- 核心类型 --
@@ -79,6 +80,7 @@ export type {
   LLMChatMessage,
   ToolCallRequest,
   ChatWithToolsResult,
+  LLMCallOptions,
 } from './types/provider';
 export { ToolCallAccumulator } from './llm/accumulate-tool-calls';
 

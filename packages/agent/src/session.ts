@@ -51,7 +51,8 @@ export class Session {
   async start(
     message: string,
     ideSnapshot: IDESnapshot | undefined,
-    onEvent?: SessionEventCallback
+    onEvent?: SessionEventCallback,
+    signal?: AbortSignal,
   ): Promise<SessionResult> {
     const emit = (e: SessionEvent) => onEvent?.(e);
     const startMs = Date.now();
@@ -62,7 +63,7 @@ export class Session {
 
     let result: AgentResult;
     try {
-      result = await this.runAgent(this.mainAgent, message, ideSnapshot, emit);
+      result = await this.runAgent(this.mainAgent, message, ideSnapshot, emit, signal);
     } catch (e: any) {
       const msg = e instanceof Error ? e.message : String(e);
       result = {
@@ -205,7 +206,8 @@ export class Session {
     agent: Agent,
     message: string,
     ideSnapshot: IDESnapshot | undefined,
-    emit: SessionEventCallback
+    emit: SessionEventCallback,
+    signal?: AbortSignal,
   ): Promise<AgentResult> {
     const llmMessages = this.memory.projectToLLMMessages(
       agent.getSystemPrompt(),
@@ -237,7 +239,7 @@ export class Session {
           emit({ type: 'tool_result', agentId: agent.definition.id, toolType: e.toolType, data: e.text });
           break;
       }
-    }, toolReport);
+    }, toolReport, signal);
   }
 
   private async runAgentStream(

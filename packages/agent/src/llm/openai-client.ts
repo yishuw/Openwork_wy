@@ -3,6 +3,7 @@ import type {
   ILLMProvider,
   LLMChatMessage,
   ChatWithToolsResult,
+  LLMCallOptions,
 } from '../types/provider';
 import type { OpenAIFunctionDefinition } from '../types/tool';
 import { ToolCallAccumulator } from './accumulate-tool-calls';
@@ -100,7 +101,7 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
     msgs.reduce((sum, m) => sum + (m.content?.length || 0), 0);
 
   return {
-    async chat(messages) {
+    async chat(messages, options) {
       const startMs = Date.now();
       log.info(`chat start: model=${resolved.model}, messages=${msgCount(messages)}, inputChars=${totalChars(messages)}`, {
         model: resolved.model,
@@ -108,13 +109,16 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
         inputChars: totalChars(messages),
       });
       try {
-        const response = await client.chat.completions.create({
-          model: resolved.model,
-          messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-          temperature: resolved.temperature,
-          max_tokens: resolved.maxTokens,
-          stream: false,
-        });
+        const response = await client.chat.completions.create(
+          {
+            model: resolved.model,
+            messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+            temperature: resolved.temperature,
+            max_tokens: resolved.maxTokens,
+            stream: false,
+          },
+          { signal: options?.signal },
+        );
         const content = (response.choices[0]?.message?.content as string) || '';
         const usage = response.usage;
         const finishReason = response.choices[0]?.finish_reason ?? 'unknown';
@@ -134,6 +138,7 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
     async chatWithTools(
       messages: LLMChatMessage[],
       tools: OpenAIFunctionDefinition[],
+      options?: LLMCallOptions,
     ): Promise<ChatWithToolsResult> {
       const startMs = Date.now();
       log.info(
@@ -147,15 +152,18 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
         },
       );
       try {
-        const response = await client.chat.completions.create({
-          model: resolved.model,
-          messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-          temperature: resolved.temperature,
-          max_tokens: resolved.maxTokens,
-          tools: tools as unknown as OpenAI.Chat.Completions.ChatCompletionTool[],
-          tool_choice: 'auto',
-          stream: false,
-        });
+        const response = await client.chat.completions.create(
+          {
+            model: resolved.model,
+            messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+            temperature: resolved.temperature,
+            max_tokens: resolved.maxTokens,
+            tools: tools as unknown as OpenAI.Chat.Completions.ChatCompletionTool[],
+            tool_choice: 'auto',
+            stream: false,
+          },
+          { signal: options?.signal },
+        );
 
         const choice = response.choices[0];
         const message = choice?.message;
@@ -209,6 +217,7 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
       messages: LLMChatMessage[],
       tools: OpenAIFunctionDefinition[],
       onChunk: (type: 'thinking' | 'content', text: string) => void,
+      options?: LLMCallOptions,
     ): Promise<ChatWithToolsResult> {
       const startMs = Date.now();
       log.info(
@@ -221,15 +230,18 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
         },
       );
       try {
-        const stream = await client.chat.completions.create({
-          model: resolved.model,
-          messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-          temperature: resolved.temperature,
-          max_tokens: resolved.maxTokens,
-          tools: tools as unknown as OpenAI.Chat.Completions.ChatCompletionTool[],
-          tool_choice: 'auto',
-          stream: true,
-        });
+        const stream = await client.chat.completions.create(
+          {
+            model: resolved.model,
+            messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+            temperature: resolved.temperature,
+            max_tokens: resolved.maxTokens,
+            tools: tools as unknown as OpenAI.Chat.Completions.ChatCompletionTool[],
+            tool_choice: 'auto',
+            stream: true,
+          },
+          { signal: options?.signal },
+        );
 
         const acc = new ToolCallAccumulator();
         let fullContent = '';
@@ -290,7 +302,7 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
       }
     },
 
-    async chatStream(messages, onChunk) {
+    async chatStream(messages, onChunk, options) {
       const startMs = Date.now();
       log.info(`chatStream start: model=${resolved.model}, messages=${msgCount(messages)}, inputChars=${totalChars(messages)}`, {
         model: resolved.model,
@@ -298,13 +310,16 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
         inputChars: totalChars(messages),
       });
       try {
-        const stream = await client.chat.completions.create({
-          model: resolved.model,
-          messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-          temperature: resolved.temperature,
-          max_tokens: resolved.maxTokens,
-          stream: true,
-        });
+        const stream = await client.chat.completions.create(
+          {
+            model: resolved.model,
+            messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+            temperature: resolved.temperature,
+            max_tokens: resolved.maxTokens,
+            stream: true,
+          },
+          { signal: options?.signal },
+        );
 
         let fullContent = '';
         let finishReason: string | undefined;

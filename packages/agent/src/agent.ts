@@ -57,6 +57,15 @@ export interface AgentOverrides {
   modelCapabilities?: ModelCapabilities;
 }
 
+/** 判断是否为取消类错误（不计入 FC 失败降级） */
+export function isAbortError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { name?: string; message?: string };
+  if (e.name === 'AbortError' || e.name === 'APIUserAbortError') return true;
+  const msg = String(e.message || '');
+  return /abort(ed)?/i.test(msg) || /The user aborted/i.test(msg);
+}
+
 function toolArgsToStringParams(raw: string): Record<string, string> {
   const out: Record<string, string> = {};
   let parsed: unknown = {};
@@ -174,8 +183,14 @@ export class Agent {
     return this.activeProtocol === 'fc' ? 'fc' : 'xml';
   }
 
-  /** FC 调用失败计数；连续达到阈值后本 Agent 降级 XML */
+  /** FC 调用失败计数；连续达到阈值后本 Agent 降级 XML。Abort 不计入失败。 */
   private noteFcFailure(error: unknown): void {
+    if (isAbortError(error)) {
+      log.info('FC call aborted — not counted as failure', {
+        ...this.logBaseMeta('fc'),
+      });
+      return;
+    }
     this.fcFailStreak += 1;
     const msg = error instanceof Error ? error.message : String(error);
     log.warn(`FC call failed (streak=${this.fcFailStreak}): ${msg}`, {
@@ -210,10 +225,11 @@ export class Agent {
   async execute(
     messages: LLMMessage[],
     onEvent?: AgentEventCallback,
-    onToolCall?: ToolCallReportCallback
+    onToolCall?: ToolCallReportCallback,
+    signal?: AbortSignal,
   ): Promise<AgentResult> {
     if (this.effectiveProtocol() === 'fc' && this.provider.chatWithTools) {
-      return this.executeWithFunctionCalling(messages, onEvent, onToolCall);
+      return this.executeWithFunctionCalling(messages, onEvent, onToolCall, signal);
     }
     const emit = (e: AgentEvent) => onEvent?.(e);
     const maxTurns = resolveMaxTurns(this.definition.maxTurns);
@@ -230,9 +246,44 @@ export class Agent {
     let exitedEarly = false;
 
     for (let turn = 0; turn < maxTurns; turn++) {
+      if (signal?.aborted) {
+        stopReason = 'aborted';
+        exitedEarly = true;
+        const abortNote = '\n\n*[已取消]*';
+        fullContent += abortNote;
+        emit({ type: 'chunk', text: abortNote });
+        emit({ type: 'done' });
+        log.info(`Turn ${turns}/${maxTurns}: aborted before chat`, {
+          ...this.logBaseMeta(),
+          turn: turns,
+          maxTurns,
+          finishReason: 'aborted',
+        });
+        break;
+      }
       turns = turn + 1;
       const turnStartMs = Date.now();
-      const response = await this.provider.chat(localMessages);
+      let response: string;
+      try {
+        response = await this.provider.chat(localMessages, { signal });
+      } catch (e: any) {
+        if (isAbortError(e)) {
+          stopReason = 'aborted';
+          exitedEarly = true;
+          const abortNote = '\n\n*[已取消]*';
+          fullContent += abortNote;
+          emit({ type: 'chunk', text: abortNote });
+          emit({ type: 'done' });
+          log.info(`Turn ${turns}/${maxTurns}: aborted by signal during chat`, {
+            ...this.logBaseMeta(),
+            turn: turns,
+            maxTurns,
+            finishReason: 'aborted',
+          });
+          break;
+        }
+        throw e;
+      }
 
       if (!response) {
         emit({ type: 'done' });
@@ -269,7 +320,7 @@ export class Agent {
           toolCalls.push(tool);
           emit({ type: 'tool_start', toolType: tool.type, toolLabel: tool.params.path || tool.params.pattern || '', toolParams: tool.params });
 
-          const { result, durationMs } = await this.executeToolTimed(tool);
+          const { result, durationMs } = await this.executeToolTimed(tool, signal);
 
           emit({ type: 'tool_result', toolType: tool.type, text: result });
           fullContent += `\n**[Tool: ${tool.type}]**\n${result}\n`;
@@ -356,6 +407,7 @@ export class Agent {
     messages: LLMMessage[],
     onEvent?: AgentEventCallback,
     onToolCall?: ToolCallReportCallback,
+    signal?: AbortSignal,
   ): Promise<AgentResult> {
     const emit = (e: AgentEvent) => onEvent?.(e);
     const chatWithTools = this.provider.chatWithTools!;
@@ -375,14 +427,43 @@ export class Agent {
     let exitedEarly = false;
 
     for (let turn = 0; turn < maxTurns; turn++) {
+      if (signal?.aborted) {
+        stopReason = 'aborted';
+        exitedEarly = true;
+        const abortNote = '\n\n*[已取消]*';
+        fullContent += abortNote;
+        emit({ type: 'chunk', text: abortNote });
+        emit({ type: 'done' });
+        log.info(`Turn ${turns}/${maxTurns}: aborted before chatWithTools`, {
+          ...this.logBaseMeta('fc'),
+          turn: turns,
+          maxTurns,
+          finishReason: 'aborted',
+        });
+        break;
+      }
       turns = turn + 1;
       const turnStartMs = Date.now();
       let result: ChatWithToolsResult;
       try {
-        result = await chatWithTools(localMessages, openAiTools);
+        result = await chatWithTools(localMessages, openAiTools, { signal });
         this.noteFcSuccess();
       } catch (e: any) {
         this.noteFcFailure(e);
+        if (isAbortError(e)) {
+          stopReason = 'aborted';
+          exitedEarly = true;
+          const abortNote = '\n\n*[已取消]*';
+          fullContent += abortNote;
+          emit({ type: 'chunk', text: abortNote });
+          emit({ type: 'done' });
+          log.info(`FC aborted on turn ${turns}`, {
+            ...this.logBaseMeta('fc'),
+            turn: turns,
+            finishReason: 'aborted',
+          });
+          break;
+        }
         emit({ type: 'done' });
         log.error(`FC chatWithTools failed on turn ${turns}: ${e.message}`, {
           ...this.logBaseMeta('fc'),
@@ -456,7 +537,7 @@ export class Agent {
           toolParams: params,
         });
 
-        const timed = await this.executeToolTimed(parsed);
+        const timed = await this.executeToolTimed(parsed, signal);
         emit({ type: 'tool_result', toolType: call.name, text: timed.result });
         fullContent += `\n**[Tool: ${call.name}]**\n${timed.result}\n`;
         emit({ type: 'tool_end', toolType: call.name, durationMs: timed.durationMs });
@@ -571,7 +652,7 @@ export class Agent {
         } else if (type === 'content') {
           emit({ type: 'chunk', text });
         }
-      });
+      }, { signal });
 
       // 累加 thinking 内容到整轮
       if (turnThinking) thinkingContent += turnThinking;
@@ -598,7 +679,7 @@ export class Agent {
           toolCalls.push(tool);
           emit({ type: 'tool_start', toolType: tool.type, toolLabel: tool.params.path || tool.params.pattern || '', toolParams: tool.params });
 
-          const { result, durationMs } = await this.executeToolTimed(tool);
+          const { result, durationMs } = await this.executeToolTimed(tool, signal);
 
           emit({ type: 'tool_result', toolType: tool.type, text: result });
           fullContent += `\n\n**[Tool: ${tool.type}]**\n${result}\n`;
@@ -734,10 +815,24 @@ export class Agent {
           } else if (type === 'content') {
             emit({ type: 'chunk', text });
           }
-        });
+        }, { signal });
         this.noteFcSuccess();
       } catch (e: any) {
         this.noteFcFailure(e);
+        if (isAbortError(e)) {
+          stopReason = 'aborted';
+          exitedEarly = true;
+          const abortNote = '\n\n*[已取消]*';
+          fullContent += abortNote;
+          emit({ type: 'chunk', text: abortNote });
+          emit({ type: 'done' });
+          log.info(`FC stream aborted on turn ${turns}`, {
+            ...this.logBaseMeta('fc'),
+            turn: turns,
+            finishReason: 'aborted',
+          });
+          break;
+        }
         throw e;
       }
       if (turnThinking) thinkingContent += turnThinking;
@@ -807,7 +902,7 @@ export class Agent {
           toolLabel: params.path || params.pattern || '',
           toolParams: params,
         });
-        const timed = await this.executeToolTimed(parsed);
+        const timed = await this.executeToolTimed(parsed, signal);
         emit({ type: 'tool_result', toolType: call.name, text: timed.result });
         fullContent += `\n\n**[Tool: ${call.name}]**\n${timed.result}\n`;
         emit({ type: 'tool_end', toolType: call.name, durationMs: timed.durationMs });
@@ -875,11 +970,14 @@ export class Agent {
   }
 
   /** 执行工具并计时,返回结果与耗时。工具内部抛错统一转为 Error 文本,不中断整轮。 */
-  private async executeToolTimed(tool: ParsedTool): Promise<{ result: string; durationMs: number }> {
+  private async executeToolTimed(tool: ParsedTool, signal?: AbortSignal): Promise<{ result: string; durationMs: number }> {
     const impl = this.tools.get(tool.type);
     if (!impl) {
       log.warn(`Unknown tool: ${tool.type}`);
       return { result: `Unknown tool: ${tool.type}`, durationMs: 0 };
+    }
+    if (signal?.aborted) {
+      return { result: 'Error: aborted before tool execution', durationMs: 0 };
     }
     const keyParams = Object.entries(tool.params)
       .filter(([, v]) => v)

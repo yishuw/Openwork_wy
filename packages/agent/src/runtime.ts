@@ -185,7 +185,8 @@ export class AgentRuntime {
   async chat(
     message: string,
     payload: IDESnapshot | AgentContext,
-    sessionId = 'default'
+    sessionId = 'default',
+    signal?: AbortSignal,
   ): Promise<ChatResult> {
     await this.initialize();
 
@@ -194,13 +195,13 @@ export class AgentRuntime {
       const context = payload as AgentContext;
       const provider = createOpenAILLMProvider(this.agentConfig);
       const messages = buildMessages(this.agentConfig, message, context);
-      const content = await provider.chat(messages);
+      const content = await provider.chat(messages, { signal });
       return this.buildResult(content, 1, []);
     }
 
     const ideSnapshot = payload as IDESnapshot;
     const session = this.getOrCreateSession(sessionId);
-    const result = await session.start(message, ideSnapshot);
+    const result = await session.start(message, ideSnapshot, undefined, signal);
     return this.buildResult(result.mainResult.content, result.mainResult.turns, result.mainResult.toolCalls, result.mainResult.thinking);
   }
 
@@ -215,7 +216,7 @@ export class AgentRuntime {
 
     if (this.agentConfig.mode === 'plan') {
       const context = payload as AgentContext;
-      return this.runPlanStream(message, context, onEvent);
+      return this.runPlanStream(message, context, onEvent, signal);
     }
 
     const ideSnapshot = payload as IDESnapshot;
@@ -345,7 +346,8 @@ export class AgentRuntime {
   private async runPlanStream(
     message: string,
     context: AgentContext,
-    onEvent?: AgentRuntimeEventCallback
+    onEvent?: AgentRuntimeEventCallback,
+    signal?: AbortSignal,
   ): Promise<ChatResult> {
     const emit = (e: AgentRuntimeEvent) => onEvent?.(e);
     const provider = createOpenAILLMProvider(this.agentConfig);
@@ -353,7 +355,7 @@ export class AgentRuntime {
     try {
       const content = await provider.chatStream(messages, (type, text) => {
         emit({ type: type === 'thinking' ? 'thinking' : 'chunk', text });
-      });
+      }, { signal });
       emit({ type: 'done' });
       return this.buildResult(content, 1, []);
     } catch (e: any) {
