@@ -259,6 +259,11 @@ export class AgentRuntime {
     };
   }
 
+  /** MCP 工具元数据（供 CLI /tools 等展示）；未连接时为空数组 */
+  listMcpTools(): ReturnType<McpManager['getTools']> {
+    return this.mcpManager?.getTools() ?? [];
+  }
+
   get fileSystem(): IAgentFileSystem {
     return this.fs;
   }

@@ -114,7 +114,8 @@ function buildContext(): AgentContext {
   };
 }
 
-async function runAgentLoop(provider: ProviderConfig, mcpManager: McpManager | null, mcpServers: McpServerEntry[], workDir: string): Promise<void> {
+async function runAgentLoop(provider: ProviderConfig, mcpServers: McpServerEntry[], workDir: string): Promise<void> {
+  // MCP 只由 AgentRuntime 初始化一次，避免 CLI 预连导致 stdio 子进程翻倍
   const runtime = new AgentRuntime(buildRuntimeConfig(provider, workDir, mcpServers));
   await runtime.initialize();
 
@@ -122,7 +123,7 @@ async function runAgentLoop(provider: ProviderConfig, mcpManager: McpManager | n
 
   console.log(`\n🤖 Model: ${provider.model}`);
   console.log(`🌐 API: ${provider.apiUrl}`);
-  console.log(`🔧 Tools: 5 (built-in)${mcpStatus.serverCount ? ` + ${mcpStatus.serverCount} MCP server(s), ${mcpStatus.toolCount} tool(s)` : ''}`);
+  console.log(`🔧 Tools: 7 (built-in)${mcpStatus.serverCount ? ` + ${mcpStatus.serverCount} MCP server(s), ${mcpStatus.toolCount} tool(s)` : ''}`);
   console.log(`📁 Work dir: ${workDir}`);
   console.log('Commands: /exit, /clear, /tools\n');
 
@@ -139,7 +140,6 @@ async function runAgentLoop(provider: ProviderConfig, mcpManager: McpManager | n
 
     if (trimmed === '/exit' || trimmed === '/quit') {
       console.log('\nDisconnecting...');
-      if (mcpManager) await mcpManager.disconnectAll();
       await runtime.dispose();
       rl.close();
       return;
@@ -153,7 +153,7 @@ async function runAgentLoop(provider: ProviderConfig, mcpManager: McpManager | n
 
     if (trimmed === '/tools') {
       printBuiltInTools();
-      printMCPTools(mcpManager);
+      printMCPToolList(runtime.listMcpTools());
       rl.prompt();
       return;
     }
@@ -217,8 +217,10 @@ async function runAgentLoop(provider: ProviderConfig, mcpManager: McpManager | n
 
 function printBuiltInTools(): void {
   console.log('\n--- Built-in Tools ---');
-  const tools = ['read_file', 'list_dir', 'search_code', 'bash', 'delegate'];
+  const tools = ['file_edit', 'file_write', 'read_file', 'list_dir', 'search_code', 'bash', 'delegate'];
   const descs: Record<string, string> = {
+    file_edit: 'Edit an existing file (read-before-edit required)',
+    file_write: 'Create or fully rewrite a file (read-before-write for existing)',
     read_file: 'Read a file not currently in context',
     list_dir: 'List directory contents',
     search_code: 'Search code with regex pattern',
@@ -231,15 +233,18 @@ function printBuiltInTools(): void {
   console.log('');
 }
 
-function printMCPTools(mcpManager: McpManager | null): void {
-  if (!mcpManager || mcpManager.serverCount === 0) return;
-  const mcpTools = mcpManager.getTools();
+function printMCPToolList(mcpTools: McpToolInfo[]): void {
   if (mcpTools.length === 0) return;
   console.log('--- MCP Tools ---');
   const catalog = new ToolCatalog();
   catalog.addFromManager(mcpTools);
   catalog.printAll();
   console.log('');
+}
+
+function printMCPTools(mcpManager: McpManager | null): void {
+  if (!mcpManager || mcpManager.serverCount === 0) return;
+  printMCPToolList(mcpManager.getTools());
 }
 
 // ====================== MCP 手动模式 ======================
@@ -404,20 +409,8 @@ async function main(): Promise<void> {
     case 'agent':
     default: {
       const provider = resolveProviderConfig(args);
-      let mcpManager: McpManager | null = null;
-      let activeServers = mcpServers;
-      if (!args.noMcp && mcpServers.length > 0) {
-        try {
-          const result = await createMcpManager(mcpServers);
-          if (result) {
-            mcpManager = result.manager;
-          }
-        } catch (e: any) {
-          console.error(`MCP connection failed: ${e.message}`);
-          console.error('Continuing with built-in tools only.\n');
-        }
-      }
-      await runAgentLoop(provider, mcpManager, activeServers, args.workDir);
+      // 连接失败由 runtime.initialize 吞掉并记日志，这里不预连 MCP
+      await runAgentLoop(provider, mcpServers, args.workDir);
       break;
     }
   }
