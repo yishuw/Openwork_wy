@@ -68,6 +68,15 @@ function applyProviderToRuntime(
     model: provider?.model,
   };
   runtime.setProviderCredentials(credentials);
+  log.info(
+    `apply provider: id=${providerId || 'active'} name=${provider?.name || 'none'} hasKey=${Boolean(credentials.apiKey)} model=${credentials.model || 'none'}`,
+    {
+      providerId: providerId || null,
+      providerName: provider?.name,
+      hasKey: Boolean(credentials.apiKey),
+      model: credentials.model,
+    },
+  );
   return credentials;
 }
 
