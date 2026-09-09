@@ -1,5 +1,6 @@
 import type { AgentDefinition, AgentResult, AgentConfig } from './types/agent';
-import type { ITool } from './types/tool';
+import type { ITool, OpenAIFunctionDefinition } from './types/tool';
+import type { ILLMProvider, LLMChatMessage, ChatWithToolsResult } from './types/provider';
 import type { LLMMessage, ToolCallRecord } from './memory';
 import { ToolRegistry } from './tool-registry';
 import { createDefaultTools } from './tools/index';
@@ -28,14 +29,43 @@ export type AgentEventCallback = (event: AgentEvent) => void;
 export type ToolCallReportCallback = (toolCall: ToolCallRecord) => void;
 
 const DEFAULT_MAX_TURNS = Infinity;
+/** FC 路径临时硬上限，防模型无限 tool_calls（Phase 2 再产品化 maxTurns） */
+const FC_HARD_MAX_TURNS = 20;
+
+/** Agent 构造可选覆盖（测试注入 mock provider / 强制协议） */
+export interface AgentOverrides {
+  provider?: ILLMProvider;
+  toolProtocol?: AgentConfig['toolProtocol'];
+}
+
+function toolArgsToStringParams(raw: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  let parsed: unknown = {};
+  const text = (raw ?? '').trim();
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error(`Invalid tool arguments JSON: ${text.slice(0, 200)}`);
+    }
+  }
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (v === undefined || v === null) continue;
+      out[k] = typeof v === 'string' ? v : JSON.stringify(v);
+    }
+  }
+  return out;
+}
 
 export class Agent {
   readonly definition: AgentDefinition;
-  private provider: ReturnType<typeof createOpenAILLMProvider>;
+  private provider: ILLMProvider;
   private workspaceRoot: string;
   private tools: ToolRegistry;
   /** 日志用模型名(展示/联调);不参与调用逻辑 */
   private readonly modelLabel: string;
+  private readonly toolProtocol: NonNullable<AgentConfig['toolProtocol']>;
   /**
    * 本 Agent 会话内已 read 过的文件路径集合(规范化绝对路径)。
    * 由 FileReadTool 写入;FileEditTool / FileWriteTool 读取做前置校验。
@@ -43,10 +73,17 @@ export class Agent {
    */
   private readFileState: Set<string> = new Set();
 
-  constructor(definition: AgentDefinition, config: AgentConfig, workspaceRoot: string, extraTools?: ITool[]) {
+  constructor(
+    definition: AgentDefinition,
+    config: AgentConfig,
+    workspaceRoot: string,
+    extraTools?: ITool[],
+    overrides?: AgentOverrides,
+  ) {
     this.definition = definition;
-    this.provider = createOpenAILLMProvider(config);
+    this.provider = overrides?.provider || createOpenAILLMProvider(config);
     this.modelLabel = config.model || process.env.LLM_MODEL || 'unknown';
+    this.toolProtocol = overrides?.toolProtocol || config.toolProtocol || 'xml';
     this.workspaceRoot = workspaceRoot;
     this.tools = new ToolRegistry();
     for (const tool of createDefaultTools({ enableBash: config.enableBash })) {
@@ -88,13 +125,21 @@ export class Agent {
     return this.workspaceRoot;
   }
 
-  /** 工具协议日志字段。阶段 0 固定 xml;阶段 1 切 FC 后改为 fc / fallback_xml。 */
-  private logBaseMeta(): Record<string, unknown> {
+  /** 工具协议日志字段。 */
+  private logBaseMeta(protocol?: 'xml' | 'fc'): Record<string, unknown> {
     return {
-      protocol: 'xml',
+      protocol: protocol || this.effectiveProtocol(),
       agentId: this.definition.id,
       model: this.modelLabel,
     };
+  }
+
+  private effectiveProtocol(): 'xml' | 'fc' {
+    if (this.toolProtocol === 'fc') return 'fc';
+    if (this.toolProtocol === 'auto') {
+      return this.provider.chatWithTools ? 'fc' : 'xml';
+    }
+    return 'xml';
   }
 
   /**
@@ -110,6 +155,9 @@ export class Agent {
     onEvent?: AgentEventCallback,
     onToolCall?: ToolCallReportCallback
   ): Promise<AgentResult> {
+    if (this.effectiveProtocol() === 'fc' && this.provider.chatWithTools) {
+      return this.executeWithFunctionCalling(messages, onEvent, onToolCall);
+    }
     const emit = (e: AgentEvent) => onEvent?.(e);
     const maxTurns = this.definition.maxTurns ?? DEFAULT_MAX_TURNS;
 
@@ -213,6 +261,156 @@ export class Agent {
       turns,
       toolCalls: toolCalls.length,
     });
+    return {
+      agentId: this.definition.id,
+      content: fullContent,
+      turns,
+      toolCalls,
+    };
+  }
+
+  /**
+   * 非流式 function calling 循环（OpenAI tools / 国产兼容 API）。
+   * XML 路径保持不变；本方法仅在 protocol=fc/auto 且 provider.chatWithTools 存在时进入。
+   */
+  private async executeWithFunctionCalling(
+    messages: LLMMessage[],
+    onEvent?: AgentEventCallback,
+    onToolCall?: ToolCallReportCallback,
+  ): Promise<AgentResult> {
+    const emit = (e: AgentEvent) => onEvent?.(e);
+    const chatWithTools = this.provider.chatWithTools!;
+    const openAiTools: OpenAIFunctionDefinition[] = this.tools.listOpenAITools();
+    const maxTurns = Math.min(
+      this.definition.maxTurns ?? FC_HARD_MAX_TURNS,
+      FC_HARD_MAX_TURNS,
+    );
+
+    const localMessages: LLMChatMessage[] = messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    const executeStartMs = Date.now();
+    let fullContent = '';
+    const toolCalls: { type: string; params: Record<string, string> }[] = [];
+    let turns = 0;
+
+    for (let turn = 0; turn < maxTurns; turn++) {
+      turns = turn + 1;
+      const turnStartMs = Date.now();
+      let result: ChatWithToolsResult;
+      try {
+        result = await chatWithTools(localMessages, openAiTools);
+      } catch (e: any) {
+        emit({ type: 'done' });
+        log.error(`FC chatWithTools failed on turn ${turns}: ${e.message}`, {
+          ...this.logBaseMeta('fc'),
+          turn: turns,
+          error: e.message,
+        });
+        throw e;
+      }
+
+      if (result.content) {
+        emit({ type: 'chunk', text: result.content });
+        fullContent += result.content;
+      }
+
+      if (result.toolCalls.length === 0) {
+        emit({ type: 'done' });
+        log.info(`Turn ${turns}/${maxTurns}: final response, ${result.content.length} chars, ${Date.now() - turnStartMs}ms`, {
+          ...this.logBaseMeta('fc'),
+          turn: turns,
+          maxTurns,
+          contentLen: result.content.length,
+          finishReason: result.finishReason || 'stop',
+        });
+        break;
+      }
+
+      localMessages.push({
+        role: 'assistant',
+        content: result.content || null,
+        tool_calls: result.toolCalls.map((c) => ({
+          id: c.id,
+          type: 'function' as const,
+          function: { name: c.name, arguments: c.arguments },
+        })),
+      });
+
+      for (const call of result.toolCalls) {
+        let params: Record<string, string>;
+        try {
+          params = toolArgsToStringParams(call.arguments);
+        } catch (e: any) {
+          const errText = `Error: ${e.message}`;
+          toolCalls.push({ type: call.name, params: {} });
+          emit({ type: 'tool_start', toolType: call.name, toolLabel: '', toolParams: {} });
+          emit({ type: 'tool_result', toolType: call.name, text: errText });
+          fullContent += `\n**[Tool: ${call.name}]**\n${errText}\n`;
+          emit({ type: 'tool_end', toolType: call.name, durationMs: 0 });
+          onToolCall?.({
+            type: call.name,
+            params: {},
+            result: errText,
+            durationMs: 0,
+            agentId: this.definition.id,
+          });
+          localMessages.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: errText,
+          });
+          continue;
+        }
+
+        const parsed: ParsedTool = { type: call.name, params };
+        toolCalls.push(parsed);
+        emit({
+          type: 'tool_start',
+          toolType: call.name,
+          toolLabel: params.path || params.pattern || '',
+          toolParams: params,
+        });
+
+        const timed = await this.executeToolTimed(parsed);
+        emit({ type: 'tool_result', toolType: call.name, text: timed.result });
+        fullContent += `\n**[Tool: ${call.name}]**\n${timed.result}\n`;
+        emit({ type: 'tool_end', toolType: call.name, durationMs: timed.durationMs });
+
+        onToolCall?.({
+          type: call.name,
+          params: { ...params },
+          result: timed.result,
+          durationMs: timed.durationMs,
+          agentId: this.definition.id,
+        });
+
+        localMessages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: timed.result,
+        });
+      }
+
+      log.info(`Turn ${turns}/${maxTurns}: ${result.toolCalls.length} tool(s), ${Date.now() - turnStartMs}ms`, {
+        ...this.logBaseMeta('fc'),
+        turn: turns,
+        maxTurns,
+        toolNames: result.toolCalls.map((c) => c.name),
+        messages: localMessages.length,
+        finishReason: 'tool_calls',
+      });
+    }
+
+    log.info(`execute(FC) done: ${fullContent.length} chars, ${turns} turns, ${toolCalls.length} tool calls, ${Date.now() - executeStartMs}ms`, {
+      ...this.logBaseMeta('fc'),
+      contentLen: fullContent.length,
+      turns,
+      toolCalls: toolCalls.length,
+    });
+
     return {
       agentId: this.definition.id,
       content: fullContent,

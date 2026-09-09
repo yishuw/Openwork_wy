@@ -14,6 +14,8 @@ export interface AgentConfig {
   maxTokens?: number;
   /** 是否启用 bash 工具(默认 true)。远程部署建议关闭。 */
   enableBash?: boolean;
+  /** 工具协议：xml=标签解析；fc=OpenAI tools；auto=有 chatWithTools 则 fc */
+  toolProtocol?: 'xml' | 'fc' | 'auto';
 }
 
 /** Agent 预置定义 —— 绑定提示词、模型、温度等预设 */

@@ -35,6 +35,8 @@ export interface AgentRuntimeConfig {
   fileSystem?: IAgentFileSystem;
   /** 会话记忆的 token 预算(用于 LLM 历史滑窗);不设则用 DEFAULT_MEMORY_TOKEN_BUDGET */
   memoryTokenBudget?: number;
+  /** 工具协议：默认 xml（兼容现状）；fc/auto 走 OpenAI tools */
+  toolProtocol?: 'xml' | 'fc' | 'auto';
 }
 
 export interface ChatResult {
@@ -107,6 +109,7 @@ export class AgentRuntime {
       temperature: config.temperature,
       maxTokens: config.maxTokens,
       enableBash: config.enableBash,
+      toolProtocol: config.toolProtocol || 'xml',
     };
   }
 

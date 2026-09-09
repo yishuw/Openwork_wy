@@ -13,6 +13,8 @@ export {
   type ChatResult,
 } from './runtime';
 
+export { Agent, type AgentOverrides, type AgentEvent } from './agent';
+
 // -- 核心类型 --
 export type { AgentContext, AgentResult, SessionMessage } from './types/agent';
 export type { AgentMessage } from './types/message';
@@ -60,6 +62,12 @@ export {
   buildMessages,
   resolveLLMConfig,
 } from './llm/openai-client';
+export type {
+  ILLMProvider,
+  LLMChatMessage,
+  ToolCallRequest,
+  ChatWithToolsResult,
+} from './types/provider';
 
 // -- MCP 管理器(服务端 MCP CRUD / 测试使用) --
 export { McpManager } from './mcp/manager';
