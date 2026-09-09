@@ -7,6 +7,7 @@ import { createMcpRouter } from './routes/mcp';
 import { createConfigRouter } from './routes/config';
 import { createWorkspaceRouter } from './routes/workspace';
 import { createLLMRouter } from './routes/llm';
+import { createGitRouter } from './routes/git';
 import { WorkspaceManager } from './workspace/manager';
 import { LLMGateway, createLogger, LOG_CATEGORY } from '@openwork/agent';
 import { requestLoggerMiddleware } from './middleware/requestLogger';
@@ -43,6 +44,7 @@ export function createApp(config: ServerConfig = {}) {
   app.use('/api/config', createConfigRouter(configDir));
   app.use('/api/workspace', createWorkspaceRouter(workspaceManager, llmGateway));
   app.use('/api/llm', createLLMRouter(llmGateway));
+  app.use('/api/git', createGitRouter());
 
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: Date.now() });

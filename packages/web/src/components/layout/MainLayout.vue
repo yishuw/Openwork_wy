@@ -57,6 +57,9 @@
               @cancel-create="handleCancelCreate"
             />
           </template>
+          <template v-slot:git>
+            <GitPanel :root="store.workspaceRoot || undefined" @committed="handleGitCommitted" />
+          </template>
         </SideBar>
       </div>
       <div v-if="!store.isSingleFile && !sidebarCollapsed" class="resize-handle" @mousedown="startSidebarResize"></div>
@@ -271,6 +274,7 @@ import Toolbar from '../toolbar/Toolbar.vue';
 import { webFileLog } from '../../services/logger';
 import SideBar from './SideBar.vue';
 import type { SideBarSection } from './SideBar.vue';
+import GitPanel from '../git/GitPanel.vue';
 import { NewFileTree } from '../new-file-tree';
 import type { ContextMenuPayload } from '../new-file-tree';
 import MonacoEditor from '../editor/MonacoEditor.vue';
@@ -385,6 +389,7 @@ const { startResize, isResizing: isWindowResizing } = useWindowResize();
 // ===== 侧边栏配置 =====
 const sidebarSections = ref<SideBarSection[]>([
   { id: 'explorer', label: t('sidebar.explorer'), count: 0 },
+  { id: 'git', label: t('sidebar.git') },
 ]);
 
 const rightToolbarItems = computed<RightToolbarItem[]>(() => [
@@ -399,6 +404,10 @@ function onRightToolbarSelect(id: string) {
     activeRightPanel.value = id;
     if (!rightPanelWidth.value) initRightPanelWidth();
   }
+}
+
+function handleGitCommitted() {
+  // Git 提交成功后可刷新文件树等
 }
 
 /** 右侧面板最大宽度：主区域宽 - 侧边栏(如果展开) - 调整手柄(4) - 最小编辑器宽 - 右侧工具栏(48) */
@@ -788,6 +797,7 @@ fs.setNewFileHandler(handleNewFile);
 watch(() => store.fileTreeNodes.length, (count) => {
   sidebarSections.value = [
     { id: 'explorer', label: t('sidebar.explorer'), count },
+    { id: 'git', label: t('sidebar.git') },
   ];
 });
 
@@ -1011,6 +1021,7 @@ async function handleDrop(e: DragEvent) {
 
   sidebarSections.value = [
     { id: 'explorer', label: t('sidebar.explorer'), count: store.fileTreeNodes.length },
+    { id: 'git', label: t('sidebar.git') },
   ];
   if (sidebarCollapsed.value) toggleSidebar();
 }

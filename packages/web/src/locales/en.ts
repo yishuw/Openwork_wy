@@ -62,6 +62,14 @@ export default {
     appearance: 'APPEARANCE',
     comingSoon: 'COMING SOON',
     manage: 'MANAGE',
+    git: 'Git',
+  },
+  git: {
+    notRepo: 'Not a Git repository',
+    clean: 'Working tree clean',
+    refresh: 'Refresh',
+    commit: 'Commit all',
+    messagePlaceholder: 'Commit message…',
   },
   settings: {
     language: 'Language',

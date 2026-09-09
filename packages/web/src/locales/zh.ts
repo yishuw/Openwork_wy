@@ -62,6 +62,14 @@ export default {
     appearance: '外观',
     comingSoon: '即将推出',
     manage: '管理',
+    git: 'Git',
+  },
+  git: {
+    notRepo: '当前目录不是 Git 仓库',
+    clean: '工作区干净',
+    refresh: '刷新',
+    commit: '提交全部',
+    messagePlaceholder: '提交说明…',
   },
   settings: {
     language: '语言',
