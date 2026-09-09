@@ -66,6 +66,7 @@ function defineEditorThemes(): void {
   monaco.editor.defineTheme(EDITOR_THEME_NAMES.dark, {
     base: 'vs-dark',
     inherit: true,
+    rules: [],
     colors: {
       'editor.background': '#181c22',
       'editor.foreground': '#d6dbe2',
@@ -91,6 +92,7 @@ function defineEditorThemes(): void {
   monaco.editor.defineTheme(EDITOR_THEME_NAMES.light, {
     base: 'vs',
     inherit: true,
+    rules: [],
     colors: {
       'editor.background': '#fbfbfc',
       'editor.foreground': '#1f2328',
@@ -116,6 +118,7 @@ function defineEditorThemes(): void {
   monaco.editor.defineTheme(EDITOR_THEME_NAMES.blue, {
     base: 'vs-dark',
     inherit: true,
+    rules: [],
     colors: {
       'editor.background': '#12243e',
       'editor.foreground': '#dce4f0',
@@ -151,12 +154,12 @@ onMounted(() => {
 
   const monacoTheme = getEditorThemeName(settings.theme);
 
-  // 创建 Monaco 编辑器实例
+  // 创建 Monaco 编辑器实例（先内置主题，再 setTheme，避免 token theme 崩溃）
   editor = monaco.editor.create(editorContainer.value, {
     value: props.content ?? '',
     language: props.language,
     readOnly: props.readOnly ?? false,
-    theme: monacoTheme,
+    theme: monacoTheme === 'openwork-light' ? 'vs' : 'vs-dark',
     automaticLayout: true,               // 自动响应容器大小变化
     minimap: { enabled: true },
     fontSize: 14,
@@ -171,6 +174,11 @@ onMounted(() => {
     cursorBlinking: 'smooth',
     cursorSmoothCaretAnimation: 'on',
   });
+  try {
+    monaco.editor.setTheme(monacoTheme);
+  } catch {
+    /* ignore custom theme failures */
+  }
 
     // 内容变更时通知父组件
     editor.onDidChangeModelContent(() => {
