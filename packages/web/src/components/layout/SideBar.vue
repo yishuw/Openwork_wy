@@ -85,8 +85,12 @@ function toggle(id: string) {
 .sb-section {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
+}
+
+.sb-section:first-of-type {
+  flex: 1 1 auto;
 }
 
 .sb-section-header {
@@ -125,7 +129,7 @@ function toggle(id: string) {
 }
 
 .sb-section-body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
 }

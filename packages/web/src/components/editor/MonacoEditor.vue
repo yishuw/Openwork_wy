@@ -193,7 +193,8 @@ watch(() => settings.theme, (t) => {
 });
 
 onBeforeUnmount(() => {
-  clearEditorInstance();
+  // 仅当全局单例仍是本实例时才 dispose，避免关闭无关 Tab 时销毁正在使用的编辑器
+  clearEditorInstance(editor);
 });
 </script>
 

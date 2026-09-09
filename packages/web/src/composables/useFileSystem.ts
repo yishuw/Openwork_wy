@@ -99,12 +99,16 @@ export function useFileSystem() {
     }
   }
 
-  /** ArrayBuffer → base64 字符串 */
+  /** ArrayBuffer → base64 字符串（分块，避免大文件卡死主线程） */
   function arrayBufferToBase64(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);
+    const CHUNK = 0x8000;
     let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      binary += String.fromCharCode.apply(
+        null,
+        bytes.subarray(i, Math.min(i + CHUNK, bytes.length)) as unknown as number[],
+      );
     }
     return btoa(binary);
   }
@@ -851,4 +855,25 @@ export function useFileSystem() {
     setOpenFileDialogHandler,
     setNewFileHandler,
   };
+}
+
+/**
+ * 独立刷新已打开标签（AgentChatB 用；勿再调 useFileSystem() 以免重复注册快捷键）。
+ */
+export async function reloadTabsForPaths(paths: string[]) {
+  const store = useEditorStore();
+  const client = createFileServiceClient();
+  for (const p of paths) {
+    const tab = store.findTabByPath(p);
+    if (!tab || tab.isUntitled || tab.isDirty) continue;
+    if (tab.viewMode !== 'code' && tab.viewMode !== 'markdown' && tab.viewMode !== 'html') {
+      continue;
+    }
+    try {
+      const content = await client.readFile(tab.path);
+      store.replaceTabContent(tab.id, content);
+    } catch {
+      /* ignore single-file reload failures */
+    }
+  }
 }

@@ -80,7 +80,7 @@ import { useLLMSettings } from '../../composables/useLLMSettings';
 import { useEditorStore } from '../../stores/editor';
 import { useAgent } from '../../composables/useAgent';
 import { useSessionMessages } from '../../composables/useSessionMessages';
-import { useFileSystem } from '../../composables/useFileSystem';
+import { reloadTabsForPaths } from '../../composables/useFileSystem';
 import type { DisplayMessage } from '@openwork/agent';
 import ChatSessionTabs from './chat-b/ChatSessionTabs.vue';
 import ChatEmptyState from './chat-b/ChatEmptyState.vue';
@@ -100,7 +100,6 @@ const editorStore = useEditorStore();
 const input = ref('');
 
 const agentCtrl = useAgent();
-const fs = useFileSystem();
 
 const { messages: persistedMessages, refresh: refreshMessages } = useSessionMessages(
   () => editorStore.activeWorkspaceId,
@@ -198,7 +197,7 @@ async function send() {
       onFilesChanged: async (paths) => {
         webAgentLog.info('send(B): agent changed files', { paths });
         try {
-          await fs.reloadTabsForPaths(paths);
+          await reloadTabsForPaths(paths);
         } catch (e: any) {
           webAgentLog.warn(`reloadTabsForPaths failed: ${e.message}`);
         }

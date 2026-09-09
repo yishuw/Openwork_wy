@@ -125,7 +125,7 @@ defineExpose({ refresh });
   gap: 8px;
   padding: 8px;
   font-size: 12px;
-  height: 100%;
+  max-height: 280px;
   overflow: auto;
 }
 .gp-header {
