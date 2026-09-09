@@ -426,6 +426,12 @@ export class Agent {
     onToolCall?: ToolCallReportCallback,
     signal?: AbortSignal
   ): Promise<AgentResult> {
+    if (
+      this.effectiveProtocol() === 'fc' &&
+      this.provider.chatStreamWithTools
+    ) {
+      return this.executeStreamWithFunctionCalling(messages, onEvent, onToolCall, signal);
+    }
     const emit = (e: AgentEvent) => onEvent?.(e);
     const maxTurns = this.definition.maxTurns ?? DEFAULT_MAX_TURNS;
 
@@ -542,6 +548,171 @@ export class Agent {
       turns,
       toolCalls: toolCalls.length,
     });
+    return {
+      agentId: this.definition.id,
+      content: fullContent,
+      turns,
+      toolCalls,
+      thinking: thinkingContent,
+    };
+  }
+
+  /** 流式 function calling 循环（OpenAI tools delta 累积） */
+  private async executeStreamWithFunctionCalling(
+    messages: LLMMessage[],
+    onEvent?: AgentEventCallback,
+    onToolCall?: ToolCallReportCallback,
+    signal?: AbortSignal,
+  ): Promise<AgentResult> {
+    const emit = (e: AgentEvent) => onEvent?.(e);
+    const chatStreamWithTools = this.provider.chatStreamWithTools!;
+    const openAiTools: OpenAIFunctionDefinition[] = this.tools.listOpenAITools();
+    const maxTurns = Math.min(
+      this.definition.maxTurns ?? FC_HARD_MAX_TURNS,
+      FC_HARD_MAX_TURNS,
+    );
+
+    const localMessages: LLMChatMessage[] = messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    const executeStartMs = Date.now();
+    let fullContent = '';
+    let thinkingContent = '';
+    const toolCalls: { type: string; params: Record<string, string> }[] = [];
+    let turns = 0;
+
+    for (let turn = 0; turn < maxTurns; turn++) {
+      if (signal?.aborted) {
+        emit({ type: 'done' });
+        log.info(`Turn ${turns}/${maxTurns}: aborted by signal`, {
+          ...this.logBaseMeta('fc'),
+          turn: turns,
+          maxTurns,
+          finishReason: 'aborted',
+        });
+        break;
+      }
+      turns = turn + 1;
+      const turnStartMs = Date.now();
+      let turnThinking = '';
+
+      const result = await chatStreamWithTools(localMessages, openAiTools, (type, text) => {
+        if (type === 'thinking') {
+          turnThinking += text;
+          emit({ type: 'thinking', text });
+        } else if (type === 'content') {
+          emit({ type: 'chunk', text });
+        }
+      });
+      if (turnThinking) thinkingContent += turnThinking;
+
+      if (result.content) {
+        fullContent += result.content;
+      }
+
+      if (result.toolCalls.length === 0) {
+        emit({ type: 'done' });
+        log.info(
+          `Turn ${turns}/${maxTurns}: final response, ${result.content.length} chars, ${Date.now() - turnStartMs}ms`,
+          {
+            ...this.logBaseMeta('fc'),
+            turn: turns,
+            maxTurns,
+            contentLen: result.content.length,
+            finishReason: result.finishReason || 'stop',
+          },
+        );
+        break;
+      }
+
+      localMessages.push({
+        role: 'assistant',
+        content: result.content || null,
+        tool_calls: result.toolCalls.map((c) => ({
+          id: c.id,
+          type: 'function' as const,
+          function: { name: c.name, arguments: c.arguments },
+        })),
+      });
+
+      for (const call of result.toolCalls) {
+        let params: Record<string, string>;
+        try {
+          params = toolArgsToStringParams(call.arguments);
+        } catch (e: any) {
+          const errText = `Error: ${e.message}`;
+          toolCalls.push({ type: call.name, params: {} });
+          emit({ type: 'tool_start', toolType: call.name, toolLabel: '', toolParams: {} });
+          emit({ type: 'tool_result', toolType: call.name, text: errText });
+          fullContent += `\n\n**[Tool: ${call.name}]**\n${errText}\n`;
+          emit({ type: 'tool_end', toolType: call.name, durationMs: 0 });
+          onToolCall?.({
+            type: call.name,
+            params: {},
+            result: errText,
+            durationMs: 0,
+            agentId: this.definition.id,
+          });
+          localMessages.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: errText,
+          });
+          continue;
+        }
+
+        const parsed: ParsedTool = { type: call.name, params };
+        toolCalls.push(parsed);
+        emit({
+          type: 'tool_start',
+          toolType: call.name,
+          toolLabel: params.path || params.pattern || '',
+          toolParams: params,
+        });
+        const timed = await this.executeToolTimed(parsed);
+        emit({ type: 'tool_result', toolType: call.name, text: timed.result });
+        fullContent += `\n\n**[Tool: ${call.name}]**\n${timed.result}\n`;
+        emit({ type: 'tool_end', toolType: call.name, durationMs: timed.durationMs });
+        onToolCall?.({
+          type: call.name,
+          params: { ...params },
+          result: timed.result,
+          durationMs: timed.durationMs,
+          agentId: this.definition.id,
+        });
+        localMessages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: timed.result,
+        });
+      }
+
+      log.info(
+        `Turn ${turns}/${maxTurns}: ${result.toolCalls.length} tool(s), ${Date.now() - turnStartMs}ms`,
+        {
+          ...this.logBaseMeta('fc'),
+          turn: turns,
+          maxTurns,
+          toolNames: result.toolCalls.map((c) => c.name),
+          messages: localMessages.length,
+          finishReason: 'tool_calls',
+        },
+      );
+    }
+
+    log.info(
+      `executeStream(FC) done: ${fullContent.length} chars, thinking=${thinkingContent.length}, turns=${turns}, ${toolCalls.length} tool calls, ${Date.now() - executeStartMs}ms`,
+      {
+        ...this.logBaseMeta('fc'),
+        contentLen: fullContent.length,
+        thinkingLen: thinkingContent.length,
+        turns,
+        toolCalls: toolCalls.length,
+      },
+    );
+
     return {
       agentId: this.definition.id,
       content: fullContent,

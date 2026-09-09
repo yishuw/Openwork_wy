@@ -140,3 +140,81 @@ describe('Agent function calling (non-stream)', () => {
     expect(result.turns).toBe(1);
   });
 });
+
+describe('Agent function calling (stream)', () => {
+  it('streams content then tool then final', async () => {
+    let call = 0;
+    const provider: ILLMProvider = {
+      async chat() {
+        return '';
+      },
+      async chatStream() {
+        return '';
+      },
+      async chatStreamWithTools(_msgs, _tools, onChunk) {
+        call += 1;
+        if (call === 1) {
+          onChunk('thinking', 'hmm');
+          onChunk('content', 'Looking up ');
+          onChunk('content', 'file...');
+          return {
+            content: 'Looking up file...',
+            toolCalls: [
+              {
+                id: 's1',
+                name: 'read_file',
+                arguments: JSON.stringify({ path: 'package.json' }),
+              },
+            ],
+            finishReason: 'tool_calls',
+          };
+        }
+        onChunk('content', 'All good.');
+        return { content: 'All good.', toolCalls: [], finishReason: 'stop' };
+      },
+    };
+
+    const agent = new Agent(def, baseConfig, process.cwd(), undefined, {
+      provider,
+      toolProtocol: 'fc',
+    });
+
+    const chunks: string[] = [];
+    const tools: string[] = [];
+    const result = await agent.executeStream(
+      [{ role: 'user', content: 'read' }],
+      (e) => {
+        if (e.type === 'chunk' && e.text) chunks.push(e.text);
+        if (e.type === 'tool_start' && e.toolType) tools.push(e.toolType);
+      },
+      (tc) => tools.push(`report:${tc.type}`),
+    );
+
+    expect(result.turns).toBe(2);
+    expect(result.toolCalls.map((t) => t.type)).toEqual(['read_file']);
+    expect(chunks.join('')).toContain('Looking up');
+    expect(chunks.join('')).toContain('All good.');
+    expect(tools).toContain('read_file');
+    expect(tools).toContain('report:read_file');
+    expect(result.thinking).toContain('hmm');
+    expect(result.content).toContain('Tool: read_file');
+  });
+
+  it('falls back to XML stream when only chatStream exists', async () => {
+    const provider: ILLMProvider = {
+      async chat() {
+        return '';
+      },
+      async chatStream() {
+        return 'plain stream text';
+      },
+    };
+    const agent = new Agent(def, { ...baseConfig, toolProtocol: 'auto' }, process.cwd(), undefined, {
+      provider,
+      toolProtocol: 'auto',
+    });
+    const result = await agent.executeStream([{ role: 'user', content: 'x' }]);
+    expect(result.content).toContain('plain stream text');
+    expect(result.turns).toBe(1);
+  });
+});

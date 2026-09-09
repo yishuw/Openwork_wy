@@ -68,6 +68,7 @@ export type {
   ToolCallRequest,
   ChatWithToolsResult,
 } from './types/provider';
+export { ToolCallAccumulator } from './llm/accumulate-tool-calls';
 
 // -- MCP 管理器(服务端 MCP CRUD / 测试使用) --
 export { McpManager } from './mcp/manager';

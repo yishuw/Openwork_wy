@@ -46,5 +46,11 @@ export interface ILLMProvider {
     messages: LLMChatMessage[],
     tools: OpenAIFunctionDefinition[],
   ): Promise<ChatWithToolsResult>;
+  /** 流式 + tools；onChunk 仍只收 thinking/content，tool_calls 在返回值中 */
+  chatStreamWithTools?(
+    messages: LLMChatMessage[],
+    tools: OpenAIFunctionDefinition[],
+    onChunk: (type: 'thinking' | 'content', text: string) => void,
+  ): Promise<ChatWithToolsResult>;
   chatStream(messages: { role: string; content: string }[], onChunk: (type: 'thinking' | 'content', text: string) => void): Promise<string>;
 }

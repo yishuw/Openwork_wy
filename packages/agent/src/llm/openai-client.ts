@@ -5,6 +5,7 @@ import type {
   ChatWithToolsResult,
 } from '../types/provider';
 import type { OpenAIFunctionDefinition } from '../types/tool';
+import { ToolCallAccumulator } from './accumulate-tool-calls';
 import type { AgentConfig, AgentContext } from '../types/agent';
 import { createLogger } from '../logger';
 import { LOG_CATEGORY } from '../log-categories';
@@ -195,6 +196,91 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
         return { content, toolCalls, finishReason };
       } catch (e: any) {
         log.error(`chatWithTools failed: ${e.message}`, {
+          protocol: 'fc',
+          model: resolved.model,
+          error: e.message,
+          status: e.status,
+        });
+        throw e;
+      }
+    },
+
+    async chatStreamWithTools(
+      messages: LLMChatMessage[],
+      tools: OpenAIFunctionDefinition[],
+      onChunk: (type: 'thinking' | 'content', text: string) => void,
+    ): Promise<ChatWithToolsResult> {
+      const startMs = Date.now();
+      log.info(
+        `chatStreamWithTools start: model=${resolved.model}, messages=${messages.length}, tools=${tools.length}`,
+        {
+          protocol: 'fc',
+          model: resolved.model,
+          messages: messages.length,
+          tools: tools.length,
+        },
+      );
+      try {
+        const stream = await client.chat.completions.create({
+          model: resolved.model,
+          messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+          temperature: resolved.temperature,
+          max_tokens: resolved.maxTokens,
+          tools: tools as unknown as OpenAI.Chat.Completions.ChatCompletionTool[],
+          tool_choice: 'auto',
+          stream: true,
+        });
+
+        const acc = new ToolCallAccumulator();
+        let fullContent = '';
+        let finishReason: string | undefined;
+
+        for await (const chunk of stream) {
+          const choice = chunk.choices?.[0];
+          if (choice?.finish_reason) finishReason = choice.finish_reason;
+          const delta = (choice?.delta ?? {}) as {
+            reasoning_content?: unknown;
+            content?: unknown;
+            tool_calls?: Array<{
+              index?: number;
+              id?: string;
+              function?: { name?: string; arguments?: string };
+            }>;
+          };
+          if (delta.reasoning_content) {
+            onChunk('thinking', String(delta.reasoning_content));
+          }
+          if (delta.content) {
+            fullContent += String(delta.content);
+            onChunk('content', String(delta.content));
+          }
+          if (delta.tool_calls) {
+            acc.apply({ tool_calls: delta.tool_calls });
+          }
+        }
+
+        const toolCalls = acc.snapshot();
+        const normalized: ChatWithToolsResult['finishReason'] =
+          toolCalls.length > 0
+            ? 'tool_calls'
+            : finishReason === 'stop' || finishReason === 'length'
+              ? finishReason
+              : 'stop';
+
+        log.info(
+          `chatStreamWithTools done: content=${fullContent.length}, toolCalls=${toolCalls.length}, finish=${normalized}, ${Date.now() - startMs}ms`,
+          {
+            protocol: 'fc',
+            model: resolved.model,
+            contentLen: fullContent.length,
+            toolNames: toolCalls.map((t) => t.name),
+            finishReason: normalized,
+          },
+        );
+
+        return { content: fullContent, toolCalls, finishReason: normalized };
+      } catch (e: any) {
+        log.error(`chatStreamWithTools failed: ${e.message}`, {
           protocol: 'fc',
           model: resolved.model,
           error: e.message,
