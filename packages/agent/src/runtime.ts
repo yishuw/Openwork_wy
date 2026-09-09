@@ -98,6 +98,8 @@ export class AgentRuntime {
   private mcpTools: ITool[] = [];
   private initialized = false;
   private sessionMap = new Map<string, Session>();
+  /** 同 sessionId 串行执行，避免并发写 SessionMemory 交错 */
+  private sessionLocks = new Map<string, Promise<unknown>>();
 
   constructor(config: AgentRuntimeConfig) {
     this.config = config;
@@ -180,6 +182,26 @@ export class AgentRuntime {
   }
 
   /**
+   * 将同一 sessionId 的操作串行化。
+   * 前一次无论成功或失败，下一次都会开始；错误不阻塞后续请求。
+   */
+  private enqueueSession<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.sessionLocks.get(sessionId) ?? Promise.resolve();
+    const run = prev.then(() => fn(), () => fn());
+    const tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.sessionLocks.set(sessionId, tail);
+    void tail.then(() => {
+      if (this.sessionLocks.get(sessionId) === tail) {
+        this.sessionLocks.delete(sessionId);
+      }
+    });
+    return run;
+  }
+
+  /**
    * 非流式 chat:build 模式走 Session+memory;plan 模式直连 LLM 不带记忆
    */
   async chat(
@@ -200,9 +222,11 @@ export class AgentRuntime {
     }
 
     const ideSnapshot = payload as IDESnapshot;
-    const session = this.getOrCreateSession(sessionId);
-    const result = await session.start(message, ideSnapshot, undefined, signal);
-    return this.buildResult(result.mainResult.content, result.mainResult.turns, result.mainResult.toolCalls, result.mainResult.thinking);
+    return this.enqueueSession(sessionId, async () => {
+      const session = this.getOrCreateSession(sessionId);
+      const result = await session.start(message, ideSnapshot, undefined, signal);
+      return this.buildResult(result.mainResult.content, result.mainResult.turns, result.mainResult.toolCalls, result.mainResult.thinking);
+    });
   }
 
   async chatStream(
@@ -220,7 +244,6 @@ export class AgentRuntime {
     }
 
     const ideSnapshot = payload as IDESnapshot;
-    const session = this.getOrCreateSession(sessionId);
 
     const emit = (e: AgentRuntimeEvent) => onEvent?.(e);
     const sessionEvent = (se: SessionEvent) => {
@@ -248,14 +271,17 @@ export class AgentRuntime {
       }
     };
 
-    try {
-      const result = await session.startStream(message, ideSnapshot, sessionEvent, signal);
-      emit({ type: 'done' });
-      return this.buildResult(result.mainResult.content, result.mainResult.turns, result.mainResult.toolCalls, result.mainResult.thinking);
-    } catch (e: any) {
-      emit({ type: 'error', error: e.message || String(e) });
-      throw e;
-    }
+    return this.enqueueSession(sessionId, async () => {
+      const session = this.getOrCreateSession(sessionId);
+      try {
+        const result = await session.startStream(message, ideSnapshot, sessionEvent, signal);
+        emit({ type: 'done' });
+        return this.buildResult(result.mainResult.content, result.mainResult.turns, result.mainResult.toolCalls, result.mainResult.thinking);
+      } catch (e: any) {
+        emit({ type: 'error', error: e.message || String(e) });
+        throw e;
+      }
+    });
   }
 
   get mcpStatus(): { serverCount: number; toolCount: number } {
