@@ -83,6 +83,18 @@ export type {
   LLMCallOptions,
 } from './types/provider';
 export { ToolCallAccumulator } from './llm/accumulate-tool-calls';
+export {
+  DEFAULT_PERMISSION_MODE,
+  previewParam,
+  buildApprovalLabel,
+  requiresApproval,
+  defaultDecision,
+  resolvePermissionMode,
+  type PermissionMode,
+  type ApprovalDecision,
+  type ApprovalRequest,
+  type Approver,
+} from './permission';
 
 // -- MCP 管理器(服务端 MCP CRUD / 测试使用) --
 export { McpManager } from './mcp/manager';

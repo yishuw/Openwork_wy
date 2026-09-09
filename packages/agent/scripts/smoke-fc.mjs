@@ -40,6 +40,8 @@ const runtime = new AgentRuntime({
   workspaceRoot: root,
   enableBash: false,
   toolProtocol: 'auto',
+  // 冒烟脚本无交互确认，须允许写文件
+  permissionMode: 'full-auto',
 });
 
 console.log(`[smoke] root=${root}`);

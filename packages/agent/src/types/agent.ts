@@ -1,5 +1,6 @@
 import type { AgentMessage } from './message';
 import type { ModelCapabilities } from '../llm/model-capabilities';
+import type { PermissionMode } from '../permission';
 
 /** Agent 工作模式 */
 export type AgentMode = 'build' | 'plan';
@@ -19,6 +20,8 @@ export interface AgentConfig {
   toolProtocol?: 'xml' | 'fc' | 'auto';
   /** 覆盖内置 model 能力表 */
   modelCapabilities?: ModelCapabilities;
+  /** 权限模式；默认 suggest（写/bash 需确认） */
+  permissionMode?: PermissionMode;
 }
 
 /** Agent 预置定义 —— 绑定提示词、模型、温度等预设 */

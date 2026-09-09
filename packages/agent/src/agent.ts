@@ -10,6 +10,16 @@ import {
   resolveToolProtocol,
   type ModelCapabilities,
 } from './llm/model-capabilities';
+import {
+  resolvePermissionMode,
+  requiresApproval,
+  buildApprovalLabel,
+  defaultDecision,
+  DEFAULT_PERMISSION_MODE,
+  type Approver,
+  type PermissionMode,
+  type ApprovalRequest,
+} from './permission';
 import { createLogger } from './logger';
 import { LOG_CATEGORY } from './log-categories';
 
@@ -50,11 +60,13 @@ export function resolveMaxTurns(requested?: number): number {
 
 const MAX_TURNS_NOTE = (n: number) => `\n\n*[已达到最大轮次 ${n}，已停止]*`;
 
-/** Agent 构造可选覆盖（测试注入 mock provider / 强制协议） */
+/** Agent 构造可选覆盖（测试注入 mock provider / 强制协议 / 权限确认） */
 export interface AgentOverrides {
   provider?: ILLMProvider;
   toolProtocol?: AgentConfig['toolProtocol'];
   modelCapabilities?: ModelCapabilities;
+  approver?: Approver;
+  permissionMode?: PermissionMode;
 }
 
 /** 判断是否为取消类错误（不计入 FC 失败降级） */
@@ -95,6 +107,8 @@ export class Agent {
   private readonly modelLabel: string;
   private readonly requestedToolProtocol: NonNullable<AgentConfig['toolProtocol']>;
   private readonly modelCapabilities?: ModelCapabilities | null;
+  private readonly permissionMode: PermissionMode;
+  private readonly approver?: Approver;
   /** 运行时实际协议；连续失败后变为 fallback_xml → 之后走 XML */
   private activeProtocol: 'xml' | 'fc' | 'fallback_xml';
   private fcFailStreak = 0;
@@ -129,6 +143,10 @@ export class Agent {
       hasChatWithTools: !!this.provider.chatWithTools,
     });
     this.activeProtocol = resolved;
+    this.permissionMode = resolvePermissionMode(
+      overrides?.permissionMode || config.permissionMode,
+    );
+    this.approver = overrides?.approver;
     this.workspaceRoot = workspaceRoot;
     this.tools = new ToolRegistry();
     for (const tool of createDefaultTools({ enableBash: config.enableBash })) {
@@ -212,6 +230,66 @@ export class Agent {
 
   private noteFcSuccess(): void {
     this.fcFailStreak = 0;
+  }
+
+  /**
+   * 权限闸门：返回 true 表示允许执行；返回字符串为拒绝原因（写入 tool result）。
+   */
+  private async gateApproval(impl: ITool, params: Record<string, string>): Promise<true | string> {
+    const need = requiresApproval(
+      {
+        name: impl.name,
+        readOnlyHint: impl.annotations?.readOnlyHint,
+        destructiveHint: impl.annotations?.destructiveHint,
+      },
+      this.permissionMode,
+    );
+    if (!need) return true;
+
+    const label = buildApprovalLabel(impl.name, params);
+    const req: ApprovalRequest = {
+      toolName: impl.name,
+      params,
+      label,
+      mode: this.permissionMode,
+    };
+
+    log.info(`permission required: ${label}`, {
+      ...this.logBaseMeta(),
+      toolName: impl.name,
+      mode: this.permissionMode,
+    });
+
+    if (!this.approver) {
+      const d = defaultDecision(this.permissionMode);
+      log.warn(`permission ${d} (no approver): ${label}`, {
+        ...this.logBaseMeta(),
+        toolName: impl.name,
+        mode: this.permissionMode,
+        decision: d,
+      });
+      if (d === 'allow') return true;
+      return `Error: User denied (no approver): ${label}. Ask the user or change permissionMode.`;
+    }
+
+    try {
+      const decision = await this.approver(req);
+      log.info(`permission ${decision}: ${label}`, {
+        ...this.logBaseMeta(),
+        toolName: impl.name,
+        mode: this.permissionMode,
+        decision,
+      });
+      if (decision === 'allow') return true;
+      return `Error: User denied: ${label}. Do not retry the same tool; change approach.`;
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log.warn(`approver threw, treating as deny: ${msg}`, {
+        ...this.logBaseMeta(),
+        toolName: impl.name,
+      });
+      return `Error: User denied (approver error): ${msg}`;
+    }
   }
 
   /**
@@ -979,6 +1057,12 @@ export class Agent {
     if (signal?.aborted) {
       return { result: 'Error: aborted before tool execution', durationMs: 0 };
     }
+
+    const approved = await this.gateApproval(impl, tool.params);
+    if (approved !== true) {
+      return { result: approved, durationMs: 0 };
+    }
+
     const keyParams = Object.entries(tool.params)
       .filter(([, v]) => v)
       .map(([k, v]) => `${k}=${v.length > 60 ? v.slice(0, 60) + '...' : v}`)

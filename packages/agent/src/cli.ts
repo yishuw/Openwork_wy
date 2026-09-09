@@ -9,6 +9,7 @@
  *   npx tsx cli.ts --config mcp-config.json # 指定 MCP 配置文件
  *   npx tsx cli.ts --root /path/to/project  # 设置工作目录
  *   npx tsx cli.ts --url <apiUrl> --model <model> --key <apiKey> # 指定 LLM 模型信息
+ *   npx tsx cli.ts --permission auto-edit|full-auto|suggest      # 权限模式
  *
  * LLM 配置优先级: 命令行参数 (--url/--model/--key) > 环境变量 (LLM_API_URL/LLM_MODEL/LLM_API_KEY) > 内置默认值
  */
@@ -22,6 +23,8 @@ import { McpManager } from './mcp/manager';
 import { ToolCatalog } from './mcp/tool-catalog';
 import type { McpConfig, McpServerEntry } from './mcp/config';
 import type { McpToolInfo } from './mcp/manager';
+import type { Approver, PermissionMode, ApprovalRequest } from './permission';
+import { DEFAULT_PERMISSION_MODE } from './permission';
 
 // ====================== LLM 配置 ======================
 
@@ -51,13 +54,42 @@ function resolveProviderConfig(args: CliArgs): ProviderConfig {
   return { apiUrl, apiKey, model };
 }
 
-function buildRuntimeConfig(provider: ProviderConfig, workDir: string, mcpServers?: McpServerEntry[]): AgentRuntimeConfig {
+function buildRuntimeConfig(
+  provider: ProviderConfig,
+  workDir: string,
+  mcpServers?: McpServerEntry[],
+  permissionMode?: PermissionMode,
+  approver?: Approver,
+): AgentRuntimeConfig {
   return {
     mode: 'build',
     provider,
     workspaceRoot: workDir,
     mcpServers,
+    permissionMode: permissionMode || DEFAULT_PERMISSION_MODE,
+    approver,
   };
+}
+
+/** CLI 终端 y/N 确认（30s 超时视为拒绝） */
+function createCliApprover(rl: readline.Interface): Approver {
+  return (req: ApprovalRequest) =>
+    new Promise<'allow' | 'deny'>((resolve) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        console.log('\n⏰ 确认超时，已拒绝');
+        resolve('deny');
+      }, 30_000);
+      rl.question(`\n🔒 允许执行 ${req.label}？[y/N] `, (answer) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        const a = String(answer || '').trim().toLowerCase();
+        resolve(a === 'y' || a === 'yes' ? 'allow' : 'deny');
+      });
+    });
 }
 
 // ====================== MCP 集成 ======================
@@ -114,9 +146,23 @@ function buildContext(): AgentContext {
   };
 }
 
-async function runAgentLoop(provider: ProviderConfig, mcpServers: McpServerEntry[], workDir: string): Promise<void> {
+async function runAgentLoop(
+  provider: ProviderConfig,
+  mcpServers: McpServerEntry[],
+  workDir: string,
+  permissionMode?: PermissionMode,
+): Promise<void> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: '\n🧑 You> ',
+  });
+  const approver = createCliApprover(rl);
+
   // MCP 只由 AgentRuntime 初始化一次，避免 CLI 预连导致 stdio 子进程翻倍
-  const runtime = new AgentRuntime(buildRuntimeConfig(provider, workDir, mcpServers));
+  const runtime = new AgentRuntime(
+    buildRuntimeConfig(provider, workDir, mcpServers, permissionMode, approver),
+  );
   await runtime.initialize();
 
   const mcpStatus = runtime.mcpStatus;
@@ -125,17 +171,13 @@ async function runAgentLoop(provider: ProviderConfig, mcpServers: McpServerEntry
   console.log(`🌐 API: ${provider.apiUrl}`);
   console.log(`🔧 Tools: 7 (built-in)${mcpStatus.serverCount ? ` + ${mcpStatus.serverCount} MCP server(s), ${mcpStatus.toolCount} tool(s)` : ''}`);
   console.log(`📁 Work dir: ${workDir}`);
+  console.log(`🔐 Permission: ${permissionMode || DEFAULT_PERMISSION_MODE}（写文件需 y 确认）`);
   console.log('Commands: /exit, /clear, /tools');
   console.log('Ctrl+C 取消当前对话（再按或 /exit 退出）\n');
 
   let activeAbort: AbortController | null = null;
   let cancelledThisTurn = false;
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: '\n🧑 You> ',
-  });
   rl.prompt();
 
   rl.on('SIGINT', () => {
@@ -355,6 +397,7 @@ interface CliArgs {
   apiUrl?: string;
   apiKey?: string;
   model?: string;
+  permissionMode?: PermissionMode;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -386,6 +429,13 @@ function parseArgs(argv: string[]): CliArgs {
       case '--model':
         result.model = argv[++i];
         break;
+      case '--permission': {
+        const v = argv[++i];
+        if (v === 'suggest' || v === 'auto-edit' || v === 'full-auto') {
+          result.permissionMode = v;
+        }
+        break;
+      }
       default:
         if (!argv[i].startsWith('--') && !result.configPath) {
           result.configPath = argv[i];
@@ -443,7 +493,7 @@ async function main(): Promise<void> {
     default: {
       const provider = resolveProviderConfig(args);
       // 连接失败由 runtime.initialize 吞掉并记日志，这里不预连 MCP
-      await runAgentLoop(provider, mcpServers, args.workDir);
+      await runAgentLoop(provider, mcpServers, args.workDir, args.permissionMode);
       break;
     }
   }

@@ -39,6 +39,10 @@ export interface AgentRuntimeConfig {
   toolProtocol?: 'xml' | 'fc' | 'auto';
   /** 覆盖 model 能力预设 */
   modelCapabilities?: import('./llm/model-capabilities').ModelCapabilities;
+  /** 权限模式；默认 suggest */
+  permissionMode?: import('./permission').PermissionMode;
+  /** 写/bash 等需确认时的回调；未提供则按模式 deny（full-auto 除外） */
+  approver?: import('./permission').Approver;
 }
 
 export interface ChatResult {
@@ -100,10 +104,12 @@ export class AgentRuntime {
   private sessionMap = new Map<string, Session>();
   /** 同 sessionId 串行执行，避免并发写 SessionMemory 交错 */
   private sessionLocks = new Map<string, Promise<unknown>>();
+  private readonly approver?: import('./permission').Approver;
 
   constructor(config: AgentRuntimeConfig) {
     this.config = config;
     this.fs = config.fileSystem || this.createDefaultFS(config.workspaceRoot);
+    this.approver = config.approver;
     this.agentConfig = {
       mode: config.mode,
       model: config.provider.model,
@@ -115,6 +121,7 @@ export class AgentRuntime {
       enableBash: config.enableBash,
       toolProtocol: config.toolProtocol || 'xml',
       modelCapabilities: config.modelCapabilities,
+      permissionMode: config.permissionMode,
     };
   }
 
@@ -365,7 +372,11 @@ export class AgentRuntime {
       },
       this.agentConfig,
       this.config.workspaceRoot,
-      this.mcpTools.length > 0 ? this.mcpTools : undefined
+      this.mcpTools.length > 0 ? this.mcpTools : undefined,
+      {
+        approver: this.approver,
+        permissionMode: this.config.permissionMode,
+      },
     );
   }
 

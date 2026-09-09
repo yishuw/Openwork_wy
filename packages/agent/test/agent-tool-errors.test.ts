@@ -37,6 +37,7 @@ describe('tool exception safety', () => {
     const agent = new Agent(def, cfg, process.cwd(), [boom], {
       provider: xmlProviderAlways(`<list_dir path="."/>`),
       toolProtocol: 'xml',
+      permissionMode: 'full-auto',
     });
     const result = await agent.execute([{ role: 'user', content: 'x' }]);
     expect(result.content).toContain('Error: exploded');
@@ -79,6 +80,7 @@ describe('tool exception safety', () => {
     const agent = new Agent(def, cfg, process.cwd(), [t1, t2], {
       provider,
       toolProtocol: 'xml',
+      permissionMode: 'full-auto',
     });
     const result = await agent.execute([{ role: 'user', content: 'x' }]);
     expect(order).toEqual(['t1', 't2']);
