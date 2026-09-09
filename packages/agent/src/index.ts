@@ -27,7 +27,7 @@ export {
 export type { AgentContext, AgentResult, SessionMessage } from './types/agent';
 export type { AgentMessage } from './types/message';
 export type { IAgentFileSystem, FileEntry } from './types/filesystem';
-export type { ITool, OpenAIFunctionDefinition, ToolInputSchema } from './types/tool';
+export type { ITool, OpenAIFunctionDefinition, ToolInputSchema, FileChangeMeta, FileChangeHunk } from './types/tool';
 
 // -- 工具调用解析（编辑能力已下沉为 FileWriteTool / FileEditTool,不再有独立的 edits 路径） --
 export { parseToolCalls, type ParsedTool } from './parser';

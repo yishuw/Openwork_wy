@@ -30,6 +30,29 @@ export interface ToolAnnotations {
   openWorldHint?: boolean;
 }
 
+/** 单个文件改动的简化 hunk（够 Inline Diff / 确认预览用，非完整 git diff） */
+export interface FileChangeHunk {
+  /** 原文件中改动起始行（1-based，估算） */
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  /** 单 hunk 文本上限由上报方截断 */
+  oldText?: string;
+  newText?: string;
+}
+
+/** 工具成功写盘后的结构化变更元数据 */
+export interface FileChangeMeta {
+  kind: 'edit' | 'write' | 'create';
+  /** 相对 workspaceRoot 的路径（与工具参数 path 一致） */
+  path: string;
+  oldSize?: number;
+  newSize?: number;
+  hunks?: FileChangeHunk[];
+  summary: string;
+}
+
 /** 工具执行上下文 */
 export interface ToolExecutionContext {
   workspaceRoot: string;
@@ -43,6 +66,8 @@ export interface ToolExecutionContext {
    * 不引入 staleness 校验。
    */
   readFileState?: Set<string>;
+  /** 写盘成功后上报（Agent 收集进 ToolCallRecord / 事件） */
+  onFileChange?: (meta: FileChangeMeta) => void;
 }
 
 /** OpenAI Chat Completions tools[] 单项（function calling） */

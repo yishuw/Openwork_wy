@@ -1,5 +1,5 @@
 import type { AgentDefinition, AgentResult, AgentConfig } from './types/agent';
-import type { ITool, OpenAIFunctionDefinition } from './types/tool';
+import type { ITool, OpenAIFunctionDefinition, FileChangeMeta } from './types/tool';
 import type { ILLMProvider, LLMChatMessage, ChatWithToolsResult } from './types/provider';
 import type { LLMMessage, ToolCallRecord } from './memory';
 import { ToolRegistry } from './tool-registry';
@@ -35,6 +35,8 @@ export interface AgentEvent {
   toolParams?: Record<string, string>;
   /** 工具执行耗时(tool_end 时携带,供前端展示) */
   durationMs?: number;
+  /** 本轮工具产生的文件变更（write/edit） */
+  fileChanges?: FileChangeMeta[];
 }
 
 export type AgentEventCallback = (event: AgentEvent) => void;
@@ -398,11 +400,11 @@ export class Agent {
           toolCalls.push(tool);
           emit({ type: 'tool_start', toolType: tool.type, toolLabel: tool.params.path || tool.params.pattern || '', toolParams: tool.params });
 
-          const { result, durationMs } = await this.executeToolTimed(tool, signal);
+          const { result, durationMs, fileChanges } = await this.executeToolTimed(tool, signal);
 
           emit({ type: 'tool_result', toolType: tool.type, text: result });
           fullContent += `\n**[Tool: ${tool.type}]**\n${result}\n`;
-          emit({ type: 'tool_end', toolType: tool.type, durationMs });
+          emit({ type: 'tool_end', toolType: tool.type, durationMs, fileChanges });
 
           // 上报给 Session 写入 memory
           onToolCall?.({
@@ -411,6 +413,7 @@ export class Agent {
             result,
             durationMs,
             agentId: this.definition.id,
+            fileChanges,
           });
 
           localMessages.push({
@@ -618,7 +621,7 @@ export class Agent {
         const timed = await this.executeToolTimed(parsed, signal);
         emit({ type: 'tool_result', toolType: call.name, text: timed.result });
         fullContent += `\n**[Tool: ${call.name}]**\n${timed.result}\n`;
-        emit({ type: 'tool_end', toolType: call.name, durationMs: timed.durationMs });
+        emit({ type: 'tool_end', toolType: call.name, durationMs: timed.durationMs, fileChanges: timed.fileChanges });
 
         onToolCall?.({
           type: call.name,
@@ -626,6 +629,7 @@ export class Agent {
           result: timed.result,
           durationMs: timed.durationMs,
           agentId: this.definition.id,
+          fileChanges: timed.fileChanges,
         });
 
         localMessages.push({
@@ -757,11 +761,11 @@ export class Agent {
           toolCalls.push(tool);
           emit({ type: 'tool_start', toolType: tool.type, toolLabel: tool.params.path || tool.params.pattern || '', toolParams: tool.params });
 
-          const { result, durationMs } = await this.executeToolTimed(tool, signal);
+          const { result, durationMs, fileChanges } = await this.executeToolTimed(tool, signal);
 
           emit({ type: 'tool_result', toolType: tool.type, text: result });
           fullContent += `\n\n**[Tool: ${tool.type}]**\n${result}\n`;
-          emit({ type: 'tool_end', toolType: tool.type, durationMs });
+          emit({ type: 'tool_end', toolType: tool.type, durationMs, fileChanges });
 
           onToolCall?.({
             type: tool.type,
@@ -769,6 +773,7 @@ export class Agent {
             result,
             durationMs,
             agentId: this.definition.id,
+            fileChanges,
           });
 
           localMessages.push({
@@ -983,13 +988,14 @@ export class Agent {
         const timed = await this.executeToolTimed(parsed, signal);
         emit({ type: 'tool_result', toolType: call.name, text: timed.result });
         fullContent += `\n\n**[Tool: ${call.name}]**\n${timed.result}\n`;
-        emit({ type: 'tool_end', toolType: call.name, durationMs: timed.durationMs });
+        emit({ type: 'tool_end', toolType: call.name, durationMs: timed.durationMs, fileChanges: timed.fileChanges });
         onToolCall?.({
           type: call.name,
           params: { ...params },
           result: timed.result,
           durationMs: timed.durationMs,
           agentId: this.definition.id,
+          fileChanges: timed.fileChanges,
         });
         localMessages.push({
           role: 'tool',
@@ -1048,7 +1054,7 @@ export class Agent {
   }
 
   /** 执行工具并计时,返回结果与耗时。工具内部抛错统一转为 Error 文本,不中断整轮。 */
-  private async executeToolTimed(tool: ParsedTool, signal?: AbortSignal): Promise<{ result: string; durationMs: number }> {
+  private async executeToolTimed(tool: ParsedTool, signal?: AbortSignal): Promise<{ result: string; durationMs: number; fileChanges?: FileChangeMeta[] }> {
     const impl = this.tools.get(tool.type);
     if (!impl) {
       log.warn(`Unknown tool: ${tool.type}`);
@@ -1073,10 +1079,14 @@ export class Agent {
     });
     const startMs = Date.now();
     let result: string;
+    const fileChanges: FileChangeMeta[] = [];
     try {
       result = await impl.execute(tool.params, {
         workspaceRoot: this.workspaceRoot,
         readFileState: this.readFileState,
+        onFileChange: (meta) => {
+          fileChanges.push(meta);
+        },
       });
     } catch (e: any) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -1093,8 +1103,9 @@ export class Agent {
       toolName: tool.type,
       durationMs,
       resultLen: result.length,
+      fileChanges: fileChanges.length || undefined,
     });
-    return { result, durationMs };
+    return { result, durationMs, fileChanges: fileChanges.length ? fileChanges : undefined };
   }
 
   /**

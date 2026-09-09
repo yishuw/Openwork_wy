@@ -4,6 +4,7 @@ import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } fr
 import { createLogger } from '../../logger';
 import { LOG_CATEGORY } from '../../log-categories';
 import { resolveKey } from '../_shared/path';
+import { buildWriteHunk } from '../_shared/file-change';
 import {
   FILE_WRITE_TOOL_NAME,
   FILE_WRITE_TOOL_DESCRIPTION,
@@ -81,6 +82,14 @@ export class FileWriteTool implements ITool {
       const newBytes = Buffer.byteLength(content, 'utf-8');
       const newLines = content === '' ? 0 : content.split('\n').length;
       const kind = existed ? 'overwritten' : 'created';
+
+      context.onFileChange?.({
+        kind: existed ? 'write' : 'create',
+        path: target,
+        newSize: newBytes,
+        hunks: [buildWriteHunk(content)],
+        summary: `${kind} ${target}`,
+      });
 
       log.info(`file_write ${kind}: ${newBytes} bytes, ${newLines} lines, ${Date.now() - startMs}ms`, {
         path: target,
