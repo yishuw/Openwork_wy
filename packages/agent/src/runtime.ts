@@ -11,6 +11,9 @@ import { createOpenAILLMProvider, buildMessages } from './llm/openai-client';
 import { createLogger } from './logger';
 import { LOG_CATEGORY } from './log-categories';
 import type { AgentContext } from './types/agent';
+import { resolvePath } from './tools/_shared/path';
+import * as path from 'path';
+import { promises as fsp } from 'fs';
 
 const log = createLogger(LOG_CATEGORY.AGENT_RUNTIME);
 
@@ -108,33 +111,26 @@ export class AgentRuntime {
   }
 
   private createDefaultFS(rootPath: string): IAgentFileSystem {
-    const { promises: fs } = require('fs');
-    const pathModule = require('path');
-    const root = pathModule.resolve(rootPath);
-
-    const resolve = (relative: string): string => {
-      const p = pathModule.resolve(root, relative);
-      if (!p.startsWith(root)) throw new Error('Path traversal not allowed');
-      return p;
-    };
+    const root = path.resolve(rootPath);
+    const resolve = (relative: string): string => resolvePath(root, relative);
 
     return {
       async readFile(relative: string): Promise<string> {
-        return fs.readFile(resolve(relative), 'utf-8');
+        return fsp.readFile(resolve(relative), 'utf-8');
       },
       async writeFile(relative: string, content: string): Promise<void> {
-        await fs.mkdir(pathModule.dirname(resolve(relative)), { recursive: true });
-        await fs.writeFile(resolve(relative), content, 'utf-8');
+        await fsp.mkdir(path.dirname(resolve(relative)), { recursive: true });
+        await fsp.writeFile(resolve(relative), content, 'utf-8');
       },
       async exists(relative: string): Promise<boolean> {
-        try { await fs.access(resolve(relative)); return true; } catch { return false; }
+        try { await fsp.access(resolve(relative)); return true; } catch { return false; }
       },
       async readDir(relative: string): Promise<{ name: string; path: string; isDirectory: boolean }[]> {
         const abs = resolve(relative);
-        const entries = await fs.readdir(abs, { withFileTypes: true });
+        const entries = await fsp.readdir(abs, { withFileTypes: true });
         return entries.map((e: { name: string; isDirectory: () => boolean }) => ({
           name: e.name,
-          path: pathModule.relative(root, pathModule.join(abs, e.name)).replace(/\\/g, '/'),
+          path: path.relative(root, path.join(abs, e.name)).replace(/\\/g, '/'),
           isDirectory: e.isDirectory(),
         }));
       },
