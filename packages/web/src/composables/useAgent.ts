@@ -4,6 +4,7 @@ import type { AgentConfig, StreamEvent, ApprovalRequiredEvent } from '../service
 import type { ProviderConfig } from './useLLMSettings';
 import type { IDESnapshot, DisplayMessage } from '@openwork/agent';
 import { useEditorStore } from '../stores/editor';
+import { useSettingsStore } from '../stores/settings';
 import { getEditorInstance } from '../services/editorInstance';
 import { webAgentLog } from '../services/logger';
 
@@ -98,8 +99,13 @@ function collectFileTreePaths(entries: any[], basePath: string): string[] {
  */
 export function useAgent() {
   const isProcessing = ref(false);
-  /** 桌面默认 auto-edit：写文件自动，bash/destructive 需确认 */
-  const config = ref<AgentConfig>({ mode: 'build', permissionMode: 'auto-edit' });
+  const settings = useSettingsStore();
+  /** 桌面默认：协议 auto、权限 auto-edit（可在设置中改） */
+  const config = ref<AgentConfig>({
+    mode: 'build',
+    permissionMode: settings.permissionMode,
+    toolProtocol: settings.toolProtocol,
+  });
   const service = createAgentService();
   const liveMessage = ref<DisplayMessage | null>(null);
   let activeAbortController: AbortController | null = null;
@@ -122,7 +128,8 @@ export function useAgent() {
       mode: 'build',
       ...config.value,
       providerId: provider?.id || undefined,
-      permissionMode: config.value.permissionMode || 'auto-edit',
+      permissionMode: config.value.permissionMode || settings.permissionMode || 'auto-edit',
+      toolProtocol: config.value.toolProtocol || settings.toolProtocol || 'auto',
     };
   }
 
