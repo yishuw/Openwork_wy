@@ -26,6 +26,11 @@ export { parseToolCalls, type ParsedTool } from './parser';
 
 // -- OpenAI function calling 定义 --
 export { toolToOpenAIFunction, sanitizeFunctionName } from './tools/openai-function';
+export {
+  lookupModelCapabilities,
+  resolveToolProtocol,
+  type ModelCapabilities,
+} from './llm/model-capabilities';
 
 // -- 记忆模块(SessionMemory + 类型) --
 export { SessionMemory } from './memory';

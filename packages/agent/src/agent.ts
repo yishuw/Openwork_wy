@@ -6,6 +6,10 @@ import { ToolRegistry } from './tool-registry';
 import { createDefaultTools } from './tools/index';
 import { parseToolCalls, type ParsedTool } from './parser';
 import { createOpenAILLMProvider } from './llm/openai-client';
+import {
+  resolveToolProtocol,
+  type ModelCapabilities,
+} from './llm/model-capabilities';
 import { createLogger } from './logger';
 import { LOG_CATEGORY } from './log-categories';
 
@@ -31,11 +35,14 @@ export type ToolCallReportCallback = (toolCall: ToolCallRecord) => void;
 const DEFAULT_MAX_TURNS = Infinity;
 /** FC 路径临时硬上限，防模型无限 tool_calls（Phase 2 再产品化 maxTurns） */
 const FC_HARD_MAX_TURNS = 20;
+/** 连续 FC 调用失败次数达到该值后，本 Agent 降级为 XML */
+const FC_FALLBACK_FAILURE_THRESHOLD = 2;
 
 /** Agent 构造可选覆盖（测试注入 mock provider / 强制协议） */
 export interface AgentOverrides {
   provider?: ILLMProvider;
   toolProtocol?: AgentConfig['toolProtocol'];
+  modelCapabilities?: ModelCapabilities;
 }
 
 function toolArgsToStringParams(raw: string): Record<string, string> {
@@ -65,7 +72,11 @@ export class Agent {
   private tools: ToolRegistry;
   /** 日志用模型名(展示/联调);不参与调用逻辑 */
   private readonly modelLabel: string;
-  private readonly toolProtocol: NonNullable<AgentConfig['toolProtocol']>;
+  private readonly requestedToolProtocol: NonNullable<AgentConfig['toolProtocol']>;
+  private readonly modelCapabilities?: ModelCapabilities | null;
+  /** 运行时实际协议；连续失败后变为 fallback_xml → 之后走 XML */
+  private activeProtocol: 'xml' | 'fc' | 'fallback_xml';
+  private fcFailStreak = 0;
   /**
    * 本 Agent 会话内已 read 过的文件路径集合(规范化绝对路径)。
    * 由 FileReadTool 写入;FileEditTool / FileWriteTool 读取做前置校验。
@@ -83,7 +94,20 @@ export class Agent {
     this.definition = definition;
     this.provider = overrides?.provider || createOpenAILLMProvider(config);
     this.modelLabel = config.model || process.env.LLM_MODEL || 'unknown';
-    this.toolProtocol = overrides?.toolProtocol || config.toolProtocol || 'xml';
+    this.requestedToolProtocol = overrides?.toolProtocol || config.toolProtocol || 'xml';
+    this.modelCapabilities =
+      overrides?.modelCapabilities !== undefined
+        ? overrides.modelCapabilities
+        : config.modelCapabilities !== undefined
+          ? config.modelCapabilities
+          : null;
+    const resolved = resolveToolProtocol({
+      requested: this.requestedToolProtocol,
+      model: this.modelLabel,
+      capabilities: this.modelCapabilities,
+      hasChatWithTools: !!this.provider.chatWithTools,
+    });
+    this.activeProtocol = resolved;
     this.workspaceRoot = workspaceRoot;
     this.tools = new ToolRegistry();
     for (const tool of createDefaultTools({ enableBash: config.enableBash })) {
@@ -126,20 +150,41 @@ export class Agent {
   }
 
   /** 工具协议日志字段。 */
-  private logBaseMeta(protocol?: 'xml' | 'fc'): Record<string, unknown> {
+  private logBaseMeta(protocol?: 'xml' | 'fc' | 'fallback_xml'): Record<string, unknown> {
     return {
-      protocol: protocol || this.effectiveProtocol(),
+      protocol: protocol || this.activeProtocol,
       agentId: this.definition.id,
       model: this.modelLabel,
     };
   }
 
   private effectiveProtocol(): 'xml' | 'fc' {
-    if (this.toolProtocol === 'fc') return 'fc';
-    if (this.toolProtocol === 'auto') {
-      return this.provider.chatWithTools ? 'fc' : 'xml';
+    return this.activeProtocol === 'fc' ? 'fc' : 'xml';
+  }
+
+  /** FC 调用失败计数；连续达到阈值后本 Agent 降级 XML */
+  private noteFcFailure(error: unknown): void {
+    this.fcFailStreak += 1;
+    const msg = error instanceof Error ? error.message : String(error);
+    log.warn(`FC call failed (streak=${this.fcFailStreak}): ${msg}`, {
+      ...this.logBaseMeta('fc'),
+      streak: this.fcFailStreak,
+      error: msg,
+    });
+    if (
+      this.fcFailStreak >= FC_FALLBACK_FAILURE_THRESHOLD &&
+      this.activeProtocol === 'fc'
+    ) {
+      this.activeProtocol = 'fallback_xml';
+      log.warn('FC fallback to XML for this agent session', {
+        ...this.logBaseMeta('fallback_xml'),
+        threshold: FC_FALLBACK_FAILURE_THRESHOLD,
+      });
     }
-    return 'xml';
+  }
+
+  private noteFcSuccess(): void {
+    this.fcFailStreak = 0;
   }
 
   /**
@@ -302,7 +347,9 @@ export class Agent {
       let result: ChatWithToolsResult;
       try {
         result = await chatWithTools(localMessages, openAiTools);
+        this.noteFcSuccess();
       } catch (e: any) {
+        this.noteFcFailure(e);
         emit({ type: 'done' });
         log.error(`FC chatWithTools failed on turn ${turns}: ${e.message}`, {
           ...this.logBaseMeta('fc'),
@@ -598,14 +645,21 @@ export class Agent {
       const turnStartMs = Date.now();
       let turnThinking = '';
 
-      const result = await chatStreamWithTools(localMessages, openAiTools, (type, text) => {
-        if (type === 'thinking') {
-          turnThinking += text;
-          emit({ type: 'thinking', text });
-        } else if (type === 'content') {
-          emit({ type: 'chunk', text });
-        }
-      });
+      let result: ChatWithToolsResult;
+      try {
+        result = await chatStreamWithTools(localMessages, openAiTools, (type, text) => {
+          if (type === 'thinking') {
+            turnThinking += text;
+            emit({ type: 'thinking', text });
+          } else if (type === 'content') {
+            emit({ type: 'chunk', text });
+          }
+        });
+        this.noteFcSuccess();
+      } catch (e: any) {
+        this.noteFcFailure(e);
+        throw e;
+      }
       if (turnThinking) thinkingContent += turnThinking;
 
       if (result.content) {

@@ -1,4 +1,5 @@
 import type { AgentMessage } from './message';
+import type { ModelCapabilities } from '../llm/model-capabilities';
 
 /** Agent 工作模式 */
 export type AgentMode = 'build' | 'plan';
@@ -14,8 +15,10 @@ export interface AgentConfig {
   maxTokens?: number;
   /** 是否启用 bash 工具(默认 true)。远程部署建议关闭。 */
   enableBash?: boolean;
-  /** 工具协议：xml=标签解析；fc=OpenAI tools；auto=有 chatWithTools 则 fc */
+  /** 工具协议：xml=标签解析；fc=OpenAI tools；auto=按能力表/provider 选择 */
   toolProtocol?: 'xml' | 'fc' | 'auto';
+  /** 覆盖内置 model 能力表 */
+  modelCapabilities?: ModelCapabilities;
 }
 
 /** Agent 预置定义 —— 绑定提示词、模型、温度等预设 */

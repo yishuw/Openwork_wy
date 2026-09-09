@@ -37,6 +37,8 @@ export interface AgentRuntimeConfig {
   memoryTokenBudget?: number;
   /** 工具协议：默认 xml（兼容现状）；fc/auto 走 OpenAI tools */
   toolProtocol?: 'xml' | 'fc' | 'auto';
+  /** 覆盖 model 能力预设 */
+  modelCapabilities?: import('./llm/model-capabilities').ModelCapabilities;
 }
 
 export interface ChatResult {
@@ -110,6 +112,7 @@ export class AgentRuntime {
       maxTokens: config.maxTokens,
       enableBash: config.enableBash,
       toolProtocol: config.toolProtocol || 'xml',
+      modelCapabilities: config.modelCapabilities,
     };
   }
 
