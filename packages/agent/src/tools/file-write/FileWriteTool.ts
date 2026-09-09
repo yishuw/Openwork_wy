@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs';
 import * as path from 'path';
 import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } from '../../types/tool';
 import { createLogger } from '../../logger';
@@ -71,6 +71,13 @@ export class FileWriteTool implements ITool {
       const parent = path.dirname(absPath);
       if (!existsSync(parent)) {
         mkdirSync(parent, { recursive: true });
+      }
+
+      if (existed) {
+        const prev = readFileSync(absPath, 'utf-8');
+        context.onFileBackup?.(target, prev, true);
+      } else {
+        context.onFileBackup?.(target, null, false);
       }
 
       writeFileSync(absPath, content, 'utf-8');

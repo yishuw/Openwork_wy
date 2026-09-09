@@ -83,6 +83,7 @@ export type {
   LLMCallOptions,
 } from './types/provider';
 export { ToolCallAccumulator } from './llm/accumulate-tool-calls';
+export { FileUndoStack, UNDO_MAX_ENTRIES, UNDO_MAX_BYTES, type FileUndoEntry } from './file-undo';
 export {
   DEFAULT_PERMISSION_MODE,
   previewParam,

@@ -281,5 +281,22 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
     res.json({ success: ok });
   });
 
+  /** 撤销最近一次 Agent 写盘 */
+  router.post('/undo', async (req: Request, res: Response) => {
+    try {
+      const { workspaceId, workspaceRoot, sessionId } = req.body as {
+        workspaceId?: string;
+        workspaceRoot?: string;
+        sessionId?: string;
+      };
+      const runtime = await getRuntime(req.body, workspaceRoot);
+      const result = await runtime.undoLastFileChange(sessionId || 'default');
+      res.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, reason: msg });
+    }
+  });
+
   return router;
 }

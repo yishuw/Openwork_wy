@@ -105,6 +105,7 @@ export class FileEditTool implements ITool {
       updated = original.replace(oldString, newString);
     }
 
+    context.onFileBackup?.(target, original, true);
     writeFileSync(absPath, updated, 'utf-8');
 
     // 写完后刷新 readFileState:LLM 自己刚改完,当然知道当前内容,

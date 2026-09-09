@@ -12,6 +12,7 @@ import { createLogger } from './logger';
 import { LOG_CATEGORY } from './log-categories';
 import type { AgentContext } from './types/agent';
 import { resolvePath } from './tools/_shared/path';
+import { FileUndoStack } from './file-undo';
 import * as path from 'path';
 import { promises as fsp } from 'fs';
 
@@ -106,6 +107,7 @@ export class AgentRuntime {
   private sessionMap = new Map<string, Session>();
   /** 同 sessionId 串行执行，避免并发写 SessionMemory 交错 */
   private sessionLocks = new Map<string, Promise<unknown>>();
+  private undoStacks = new Map<string, FileUndoStack>();
   private readonly approver?: import('./permission').Approver;
 
   constructor(config: AgentRuntimeConfig) {
@@ -315,12 +317,35 @@ export class AgentRuntime {
   private getOrCreateSession(sessionId: string): Session {
     let session = this.sessionMap.get(sessionId);
     if (!session) {
-      const agent = this.createAgent();
+      const agent = this.createAgent(this.getUndoStack(sessionId));
       const memory = new SessionMemory(sessionId, this.config.memoryTokenBudget ?? DEFAULT_MEMORY_TOKEN_BUDGET);
       session = new Session(sessionId, agent, memory);
       this.sessionMap.set(sessionId, session);
     }
     return session;
+  }
+
+  private getUndoStack(sessionId: string): FileUndoStack {
+    let stack = this.undoStacks.get(sessionId);
+    if (!stack) {
+      stack = new FileUndoStack();
+      this.undoStacks.set(sessionId, stack);
+    }
+    return stack;
+  }
+
+  /** 撤销该会话最近一次 Agent 写盘 */
+  async undoLastFileChange(sessionId = 'default'): Promise<
+    | { ok: true; path: string; existed: boolean; bytes: number }
+    | { ok: false; reason: string }
+  > {
+    const stack = this.undoStacks.get(sessionId);
+    if (!stack) return { ok: false, reason: 'undo stack empty' };
+    return stack.undoLast(this.config.workspaceRoot);
+  }
+
+  getUndoStackSize(sessionId = 'default'): number {
+    return this.undoStacks.get(sessionId)?.size ?? 0;
   }
 
   /** 返回展示用消息(给前端 GET 接口用) */
@@ -337,7 +362,7 @@ export class AgentRuntime {
 
   /** 用持久化数据恢复 session memory */
   restoreSessionMemory(sessionId: string, data: unknown): void {
-    const agent = this.createAgent();
+    const agent = this.createAgent(this.getUndoStack(sessionId));
     const memory = new SessionMemory(sessionId, this.config.memoryTokenBudget ?? DEFAULT_MEMORY_TOKEN_BUDGET);
     memory.deserialize(data);
     const session = new Session(sessionId, agent, memory);
@@ -371,7 +396,7 @@ export class AgentRuntime {
 
   // ====================== 内部实现 ======================
 
-  private createAgent(): Agent {
+  private createAgent(undoStack?: FileUndoStack): Agent {
     return new Agent(
       {
         id: 'main',
@@ -387,6 +412,7 @@ export class AgentRuntime {
       {
         approver: this.approver,
         permissionMode: this.config.permissionMode,
+        undoStack,
       },
     );
   }

@@ -172,7 +172,7 @@ async function runAgentLoop(
   console.log(`🔧 Tools: 7 (built-in)${mcpStatus.serverCount ? ` + ${mcpStatus.serverCount} MCP server(s), ${mcpStatus.toolCount} tool(s)` : ''}`);
   console.log(`📁 Work dir: ${workDir}`);
   console.log(`🔐 Permission: ${permissionMode || DEFAULT_PERMISSION_MODE}（写文件需 y 确认）`);
-  console.log('Commands: /exit, /clear, /tools');
+  console.log('Commands: /exit, /clear, /tools, /undo');
   console.log('Ctrl+C 取消当前对话（再按或 /exit 退出）\n');
 
   let activeAbort: AbortController | null = null;
@@ -216,6 +216,17 @@ async function runAgentLoop(
     if (trimmed === '/tools') {
       printBuiltInTools();
       printMCPToolList(runtime.listMcpTools());
+      rl.prompt();
+      return;
+    }
+
+    if (trimmed === '/undo') {
+      const r = await runtime.undoLastFileChange('default');
+      if (r.ok) {
+        console.log(`↩ 已撤销: ${r.path}${r.existed ? '（已恢复原内容）' : '（已删除新建文件）'}`);
+      } else {
+        console.log(`↩ 无法撤销: ${r.reason}`);
+      }
       rl.prompt();
       return;
     }

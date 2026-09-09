@@ -68,6 +68,8 @@ export interface ToolExecutionContext {
   readFileState?: Set<string>;
   /** 写盘成功后上报（Agent 收集进 ToolCallRecord / 事件） */
   onFileChange?: (meta: FileChangeMeta) => void;
+  /** 写盘前备份，用于会话级撤销 */
+  onFileBackup?: (path: string, previousContent: string | null, existed: boolean) => void;
 }
 
 /** OpenAI Chat Completions tools[] 单项（function calling） */

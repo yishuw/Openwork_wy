@@ -21,6 +21,7 @@ import {
   type PermissionMode,
   type ApprovalRequest,
 } from './permission';
+import { FileUndoStack, type FileUndoEntry } from './file-undo';
 import { createLogger } from './logger';
 import { LOG_CATEGORY } from './log-categories';
 
@@ -70,6 +71,7 @@ export interface AgentOverrides {
   modelCapabilities?: ModelCapabilities;
   approver?: Approver;
   permissionMode?: PermissionMode;
+  undoStack?: FileUndoStack;
 }
 
 /** 判断是否为取消类错误（不计入 FC 失败降级） */
@@ -112,6 +114,7 @@ export class Agent {
   private readonly modelCapabilities?: ModelCapabilities | null;
   private permissionMode: PermissionMode;
   private readonly approver?: Approver;
+  private readonly undoStack: FileUndoStack;
   /** 运行时实际协议；连续失败后变为 fallback_xml → 之后走 XML */
   private activeProtocol: 'xml' | 'fc' | 'fallback_xml';
   private fcFailStreak = 0;
@@ -150,6 +153,7 @@ export class Agent {
       overrides?.permissionMode || config.permissionMode,
     );
     this.approver = overrides?.approver;
+    this.undoStack = overrides?.undoStack ?? new FileUndoStack();
     this.workspaceRoot = workspaceRoot;
     this.tools = new ToolRegistry();
     for (const tool of createDefaultTools({ enableBash: config.enableBash })) {
@@ -238,6 +242,18 @@ export class Agent {
 
   getPermissionMode(): PermissionMode {
     return this.permissionMode;
+  }
+
+  /** 撤销最近一次 Agent 写盘（本 Agent 的 undo 栈） */
+  async undoLastFileChange(): Promise<
+    | { ok: true; path: string; existed: boolean; bytes: number }
+    | { ok: false; reason: string }
+  > {
+    return this.undoStack.undoLast(this.workspaceRoot);
+  }
+
+  getUndoStackSize(): number {
+    return this.undoStack.size;
   }
 
   private noteFcSuccess(): void {
@@ -1097,6 +1113,16 @@ export class Agent {
         readFileState: this.readFileState,
         onFileChange: (meta) => {
           fileChanges.push(meta);
+        },
+        onFileBackup: (p, prev, existed) => {
+          const entry: FileUndoEntry = {
+            path: p,
+            existed,
+            previousContent: prev,
+            createdAt: Date.now(),
+            bytes: prev ? Buffer.byteLength(prev, 'utf-8') : 0,
+          };
+          this.undoStack.push(entry);
         },
       });
     } catch (e: any) {
