@@ -17,10 +17,13 @@ export {
 export type { AgentContext, AgentResult, SessionMessage } from './types/agent';
 export type { AgentMessage } from './types/message';
 export type { IAgentFileSystem, FileEntry } from './types/filesystem';
-export type { ITool } from './types/tool';
+export type { ITool, OpenAIFunctionDefinition, ToolInputSchema } from './types/tool';
 
 // -- 工具调用解析（编辑能力已下沉为 FileWriteTool / FileEditTool,不再有独立的 edits 路径） --
 export { parseToolCalls, type ParsedTool } from './parser';
+
+// -- OpenAI function calling 定义 --
+export { toolToOpenAIFunction, sanitizeFunctionName } from './tools/openai-function';
 
 // -- 记忆模块(SessionMemory + 类型) --
 export { SessionMemory } from './memory';

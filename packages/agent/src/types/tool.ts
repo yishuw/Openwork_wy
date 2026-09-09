@@ -45,6 +45,16 @@ export interface ToolExecutionContext {
   readFileState?: Set<string>;
 }
 
+/** OpenAI Chat Completions tools[] 单项（function calling） */
+export interface OpenAIFunctionDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: ToolInputSchema;
+  };
+}
+
 /** 工具接口 —— 内置工具和 MCP 工具的统一契约 */
 export interface ITool {
   /** XML 标签名，如 "read_file" */
@@ -69,6 +79,8 @@ export interface ITool {
    * 'children' 适合承载多段文本参数（如 file_edit 的 old/new 两段代码）。
    */
   readonly body?: 'content' | 'children';
+  /** 导出为 OpenAI tools[] 条目；未实现时由 toolToOpenAIFunction 默认生成 */
+  toOpenAIFunction?(): OpenAIFunctionDefinition;
   /** 执行工具，返回注入到对话中的结果文本 */
   execute(params: Record<string, string>, context: ToolExecutionContext): Promise<string>;
 }
