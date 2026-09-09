@@ -49,7 +49,11 @@ try {
   await runtime.initialize();
   const result = await runtime.chatStream(
     '请用工具完成：1) 用 read_file 读取 seed.txt；2) 用 file_write 创建 result.txt，内容为种子文件全文加一行 DONE。不要输出其它无关工具调用。',
-    { openFiles: [], fileTree: [], conversationHistory: [] },
+    {
+      // build 模式走 SessionMemory.projectToLLMMessages，需要 IDESnapshot
+      openFilePaths: [],
+      fileTree: [],
+    },
   );
 
   const resultAbs = join(root, 'result.txt');

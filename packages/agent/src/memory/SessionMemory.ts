@@ -158,7 +158,7 @@ export class SessionMemory {
   private buildIDESnapshotMessages(snapshot: IDESnapshot): LLMMessage[] {
     const parts: string[] = [];
 
-    if (snapshot.openFilePaths.length > 0) {
+    if (snapshot.openFilePaths && snapshot.openFilePaths.length > 0) {
       const activePath = snapshot.activeFile?.path;
       const otherPaths = snapshot.openFilePaths.filter(p => p !== activePath);
       if (otherPaths.length > 0) {
