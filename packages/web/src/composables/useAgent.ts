@@ -135,6 +135,8 @@ export function useAgent() {
       onChunk?: () => void;
       onDone?: () => void;
       onError?: (err: Error) => void;
+      /** Agent 写盘后回调（相对路径列表） */
+      onFilesChanged?: (paths: string[]) => void;
     },
   ) {
     isProcessing.value = true;
@@ -162,6 +164,7 @@ export function useAgent() {
     type LiveBlock = DisplayMessage['blocks'][number];
     let activeBlock: LiveBlock | null = null;
     let blockIdCounter = 0;
+    const changedPaths = new Set<string>();
     const nextBlockId = () => `${liveId}_blk${blockIdCounter++}`;
 
     function finishBlock() {
@@ -251,6 +254,10 @@ export function useAgent() {
           callbacks.onChunk?.();
         },
         (event: StreamEvent) => {
+          if (event.type === 'file_changed') {
+            for (const p of event.paths || []) changedPaths.add(p);
+            return;
+          }
           if (!liveMessage.value) return;
           if (event.type === 'tool_start') {
             startToolCallBlock(event.toolType || 'tool', event.toolLabel || '', event.toolParams || {});
@@ -283,6 +290,9 @@ export function useAgent() {
       // 流正常结束:让 UI 知道 live 消息即将被后端权威数据替代
       flushContent();
       finishBlock();
+      if (changedPaths.size > 0) {
+        callbacks.onFilesChanged?.(Array.from(changedPaths));
+      }
     } catch (e: any) {
       webAgentLog.error(`streamMessage error: ${e.name} ${e.message}`, { name: e.name, message: e.message });
       if (e.name === 'AbortError') {

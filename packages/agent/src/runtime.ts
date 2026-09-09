@@ -62,6 +62,8 @@ export interface AgentRuntimeEvent {
   toolParams?: Record<string, string>;
   /** 工具执行耗时(tool_end 时携带) */
   durationMs?: number;
+  /** 写盘类工具变更 */
+  fileChanges?: import('./types/tool').FileChangeMeta[];
   error?: string;
 }
 
@@ -265,7 +267,7 @@ export class AgentRuntime {
           emit({ type: 'tool_start', toolName: se.toolType, toolLabel: se.toolLabel, toolParams: se.toolParams });
           break;
         case 'tool_end':
-          emit({ type: 'tool_end', toolName: se.toolType, durationMs: se.durationMs });
+          emit({ type: 'tool_end', toolName: se.toolType, durationMs: se.durationMs, fileChanges: se.fileChanges });
           break;
         case 'tool_result':
           emit({ type: 'tool_result', toolName: se.toolType, text: se.data });

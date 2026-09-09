@@ -25,6 +25,8 @@ export interface SessionEvent {
   toolParams?: Record<string, string>;
   /** 工具执行耗时(tool_end 时携带) */
   durationMs?: number;
+  /** 写盘变更 */
+  fileChanges?: import('./types/tool').FileChangeMeta[];
 }
 
 export type SessionEventCallback = (event: SessionEvent) => void;
@@ -241,7 +243,7 @@ export class Session {
           emit({ type: 'tool_start', agentId: agent.definition.id, toolType: e.toolType, toolLabel: e.toolLabel, toolParams: e.toolParams });
           break;
         case 'tool_end':
-          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType, durationMs: e.durationMs });
+          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType, durationMs: e.durationMs, fileChanges: e.fileChanges });
           break;
         case 'tool_result':
           emit({ type: 'tool_result', agentId: agent.definition.id, toolType: e.toolType, data: e.text });
@@ -281,7 +283,7 @@ export class Session {
           emit({ type: 'tool_start', agentId: agent.definition.id, toolType: e.toolType, toolLabel: e.toolLabel, toolParams: e.toolParams });
           break;
         case 'tool_end':
-          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType, durationMs: e.durationMs });
+          emit({ type: 'tool_end', agentId: agent.definition.id, toolType: e.toolType, durationMs: e.durationMs, fileChanges: e.fileChanges });
           break;
         case 'tool_result':
           emit({ type: 'tool_result', agentId: agent.definition.id, toolType: e.toolType, data: e.text });

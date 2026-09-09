@@ -215,7 +215,17 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
               writeSSE({ tool_start: { toolType: e.toolName, toolLabel: e.toolLabel || '', toolParams: e.toolParams || {} } });
               break;
             case 'tool_end':
-              writeSSE({ tool_end: { toolType: e.toolName, durationMs: e.durationMs || 0 } });
+              writeSSE({
+                tool_end: {
+                  toolType: e.toolName,
+                  durationMs: e.durationMs || 0,
+                  fileChanges: e.fileChanges,
+                },
+              });
+              if (e.fileChanges && e.fileChanges.length > 0) {
+                const paths = Array.from(new Set(e.fileChanges.map((c) => c.path)));
+                writeSSE({ file_changed: { paths, fileChanges: e.fileChanges } });
+              }
               break;
             case 'tool_result':
               writeSSE({ tool_result: { name: e.toolName, content: e.text } });

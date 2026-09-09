@@ -791,6 +791,28 @@ export function useFileSystem() {
   onMounted(() => window.addEventListener('keydown', handleKeydown));
   onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
+  /**
+   * Agent 写盘后刷新已打开标签。
+   * - 仅处理文本型 viewMode；脏标签跳过（避免覆盖用户未保存修改）
+   */
+  async function reloadTabsForPaths(paths: string[]) {
+    const client = getClient();
+    for (const p of paths) {
+      const tab = store.findTabByPath(p);
+      if (!tab || tab.isUntitled) continue;
+      if (tab.isDirty) continue;
+      if (tab.viewMode !== 'code' && tab.viewMode !== 'markdown' && tab.viewMode !== 'html') {
+        continue;
+      }
+      try {
+        const content = await client.readFile(tab.path);
+        store.replaceTabContent(tab.id, content);
+      } catch (e: any) {
+        error.value = e.message;
+      }
+    }
+  }
+
   return {
     client: activeClient,
     isLoading,
@@ -798,6 +820,7 @@ export function useFileSystem() {
     env,
     loadDirectory,
     openAndReadFile,
+    reloadTabsForPaths,
     openFileAsLightweightWorkspace,
     saveCurrentFile,
     openFolderDialog,

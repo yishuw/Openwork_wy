@@ -43,7 +43,7 @@ export interface AgentMessage {
 
 /** SSE 流式事件类型 */
 export interface StreamEvent {
-  type: 'tool_start' | 'tool_end' | 'tool_result' | 'thinking_start' | 'thinking_end';
+  type: 'tool_start' | 'tool_end' | 'tool_result' | 'thinking_start' | 'thinking_end' | 'file_changed';
   /** tool_result 的内容文本 */
   content?: string;
   /** 工具类型(tool_start/tool_end) */
@@ -54,6 +54,8 @@ export interface StreamEvent {
   toolParams?: Record<string, string>;
   /** 工具执行耗时毫秒(tool_end) */
   durationMs?: number;
+  /** Agent 写盘路径（相对 workspaceRoot） */
+  paths?: string[];
 }
 
 /** 流式请求 body —— 与 server 端 StreamRequestBody 对齐 */
@@ -170,6 +172,14 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
               const decision = await options.onApprovalRequired(req);
               await sendApproval(req.approvalId, decision);
               continue;
+            }
+
+            if (data.file_changed && onEvent) {
+              const fc = data.file_changed as { paths?: string[] };
+              onEvent({
+                type: 'file_changed',
+                paths: fc.paths || [],
+              });
             }
 
             if (data.tool_start && onEvent) {
