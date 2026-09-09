@@ -117,6 +117,13 @@ export class WorkspaceManager {
       mcpServers: undefined,
       memoryTokenBudget,
       enableBash: resolveEnableBash(),
+      // 桌面产品路径尚无交互确认 UI，保持写文件可用；可用 OPENWORK_PERMISSION_MODE=suggest 收紧
+      permissionMode:
+        process.env.OPENWORK_PERMISSION_MODE === 'suggest' ||
+        process.env.OPENWORK_PERMISSION_MODE === 'auto-edit' ||
+        process.env.OPENWORK_PERMISSION_MODE === 'full-auto'
+          ? (process.env.OPENWORK_PERMISSION_MODE as 'suggest' | 'auto-edit' | 'full-auto')
+          : 'full-auto',
     };
 
     const runtime = new AgentRuntime(config);

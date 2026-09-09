@@ -10,8 +10,16 @@ import { createLogger } from '@openwork/agent';
 import { loadEnabledMcpServers } from './mcp';
 import type { WorkspaceManager } from '../workspace/manager';
 import type { LLMGateway } from '@openwork/agent';
+import type { PermissionMode } from '@openwork/agent';
 
 const log = createLogger('AgentRouter');
+
+/** 产品路径暂无交互 approver，默认放行写文件以兼容现有 UI；可用环境变量收紧 */
+function resolveProductPermissionMode(): PermissionMode {
+  const v = process.env.OPENWORK_PERMISSION_MODE?.toLowerCase();
+  if (v === 'suggest' || v === 'auto-edit' || v === 'full-auto') return v;
+  return 'full-auto';
+}
 
 function buildRuntimeConfig(body: Record<string, unknown>, configDir: string, llmGateway: LLMGateway, workspaceRoot?: string): AgentRuntimeConfig {
   const cfg = (body.config as any) || body;
@@ -36,6 +44,7 @@ function buildRuntimeConfig(body: Record<string, unknown>, configDir: string, ll
     mcpServers: mode === 'build' ? loadEnabledMcpServers(configDir) : undefined,
     memoryTokenBudget: cfg.memoryTokenBudget ? Number(cfg.memoryTokenBudget) : undefined,
     enableBash: resolveEnableBash(),
+    permissionMode: resolveProductPermissionMode(),
   };
 }
 
