@@ -49,6 +49,11 @@ export class Session {
     this.subAgents.set(agent.definition.id, agent);
   }
 
+  /** 更换主 Agent（保留 memory；用于刷新 LLM 凭证） */
+  replaceMainAgent(agent: Agent): void {
+    this.mainAgent = agent;
+  }
+
   /** 同步权限模式到主/子 Agent */
   setPermissionMode(mode: import('./permission').PermissionMode): void {
     this.mainAgent.setPermissionMode(mode);

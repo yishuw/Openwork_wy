@@ -52,6 +52,25 @@ function buildRuntimeConfig(body: Record<string, unknown>, configDir: string, ll
   };
 }
 
+/** 把当前 Provider 凭证刷进已缓存的 workspace runtime（打开工作区后再配 Key 也要生效） */
+function applyProviderToRuntime(
+  runtime: AgentRuntime,
+  cfg: Record<string, unknown>,
+  llmGateway: LLMGateway,
+): { apiKey?: string; model?: string; apiUrl?: string } {
+  const providerId = cfg.providerId as string | undefined;
+  const provider = providerId
+    ? llmGateway.getProvider(providerId)
+    : llmGateway.getActiveProvider();
+  const credentials = {
+    apiUrl: provider?.apiUrl,
+    apiKey: provider?.apiKey,
+    model: provider?.model,
+  };
+  runtime.setProviderCredentials(credentials);
+  return credentials;
+}
+
 interface StreamRequestBody {
   message: string;
   /** build 模式:IDE 快照(激活文件 + 其他 tab 路径 + 文件树 + 光标/选区) */
@@ -118,7 +137,9 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
         const latestMcpServers = loadEnabledMcpServers(configDir);
         await runtime.reinitialize(latestMcpServers.length > 0 ? latestMcpServers : undefined);
       }
-      runtime.setPermissionMode(resolveRequestPermissionMode((req.body.config as any)?.permissionMode));
+      const cfg = (req.body.config as any) || {};
+      applyProviderToRuntime(runtime, cfg, llmGateway);
+      runtime.setPermissionMode(resolveRequestPermissionMode(cfg.permissionMode));
 
       // build 模式:走 ideSnapshot;plan 模式:走 context
       const payload = ideSnapshot ?? context;
@@ -187,8 +208,10 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
     const keepAlive = setInterval(() => { res.write(': heartbeat\n\n'); }, 15000);
 
     try {
-      // 每请求覆盖权限模式（前端设置 / 默认 auto-edit）
-      runtime.setPermissionMode(resolveRequestPermissionMode((body.config as any)?.permissionMode));
+      // 每请求覆盖权限模式（前端设置 / 默认 auto-edit）并刷新 LLM 凭证
+      const cfg = (body.config as any) || {};
+      applyProviderToRuntime(runtime, cfg, llmGateway);
+      runtime.setPermissionMode(resolveRequestPermissionMode(cfg.permissionMode));
 
       const mcpStatus = runtime.mcpStatus;
       if (mcpStatus.serverCount > 0) {
@@ -256,6 +279,14 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       reqLog.error(`Stream error: ${msg}`);
+      // 失败也落盘，避免用户消息在内存里丢失
+      if (workspaceId && sessionId) {
+        try {
+          await workspaceManager.persistSessionMemory(workspaceId, sessionId);
+        } catch (e: any) {
+          reqLog.warn(`persistSessionMemory after error failed: ${e.message}`);
+        }
+      }
       writeSSE({ error: msg });
       writeSSE({ done: true });
     } finally {

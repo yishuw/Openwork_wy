@@ -394,6 +394,36 @@ export class AgentRuntime {
     }
   }
 
+  /**
+   * 刷新 LLM 凭证/模型（工作区 runtime 打开后用户可能新配了 API Key）。
+   * 会替换各会话主 Agent，但保留 SessionMemory。
+   */
+  setProviderCredentials(provider: {
+    apiUrl?: string;
+    apiKey?: string;
+    model?: string;
+  }): void {
+    const next = {
+      apiUrl: provider.apiUrl || this.agentConfig.apiUrl,
+      apiKey: provider.apiKey || this.agentConfig.apiKey,
+      model: provider.model || this.agentConfig.model,
+    };
+    this.config.provider = next;
+    this.agentConfig.apiUrl = next.apiUrl;
+    this.agentConfig.apiKey = next.apiKey;
+    this.agentConfig.model = next.model;
+
+    for (const [sessionId, session] of this.sessionMap.entries()) {
+      const agent = this.createAgent(this.getUndoStack(sessionId));
+      session.replaceMainAgent(agent);
+      session.setPermissionMode(this.config.permissionMode || 'suggest');
+    }
+    log.debug('provider credentials updated on runtime', {
+      hasKey: Boolean(next.apiKey),
+      model: next.model,
+    });
+  }
+
   // ====================== 内部实现 ======================
 
   private createAgent(undoStack?: FileUndoStack): Agent {

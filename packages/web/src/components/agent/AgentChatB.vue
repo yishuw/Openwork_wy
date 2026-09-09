@@ -204,9 +204,16 @@ async function send() {
       },
       onDone: async () => {
         webAgentLog.info('send(B): streamMessage completed, refreshing from backend');
-        await refreshMessages();
-        pendingUserMessage.value = null;
-        agentCtrl.clearLive();
+        try {
+          await refreshMessages();
+        } catch (e: any) {
+          webAgentLog.warn(`refresh after stream failed: ${e.message}`);
+        }
+        // 后端已有权威消息时再清掉临时态，避免失败瞬间「闪没」
+        if (persistedMessages.value.length > 0) {
+          pendingUserMessage.value = null;
+          agentCtrl.clearLive();
+        }
         scrollToBottom();
       },
       onError: (err) => {

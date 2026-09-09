@@ -91,10 +91,19 @@ export function buildMessages(
 export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProvider {
   const resolved = resolveLLMConfig(config);
 
+  // 空 key 时用占位符，避免 OpenAI SDK 在构造期直接抛错导致会话无法建立
   const client = new OpenAI({
     baseURL: resolved.apiUrl,
-    apiKey: resolved.apiKey,
+    apiKey: resolved.apiKey || 'missing-api-key',
   });
+
+  function requireApiKey(): void {
+    if (!resolved.apiKey) {
+      throw new Error(
+        '未配置 LLM API Key。请在「设置 → AI 模型」中选择/添加提供商并填入 API Key，或设置环境变量 LLM_API_KEY。',
+      );
+    }
+  }
 
   const msgCount = (msgs: { role: string; content: string }[]): number => msgs.length;
   const totalChars = (msgs: { role: string; content: string }[]): number =>
@@ -102,6 +111,7 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
 
   return {
     async chat(messages, options) {
+      requireApiKey();
       const startMs = Date.now();
       log.info(`chat start: model=${resolved.model}, messages=${msgCount(messages)}, inputChars=${totalChars(messages)}`, {
         model: resolved.model,
@@ -140,6 +150,7 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
       tools: OpenAIFunctionDefinition[],
       options?: LLMCallOptions,
     ): Promise<ChatWithToolsResult> {
+      requireApiKey();
       const startMs = Date.now();
       log.info(
         `chatWithTools start: model=${resolved.model}, messages=${messages.length}, tools=${tools.length}`,
@@ -219,6 +230,7 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
       onChunk: (type: 'thinking' | 'content', text: string) => void,
       options?: LLMCallOptions,
     ): Promise<ChatWithToolsResult> {
+      requireApiKey();
       const startMs = Date.now();
       log.info(
         `chatStreamWithTools start: model=${resolved.model}, messages=${messages.length}, tools=${tools.length}`,
@@ -303,6 +315,7 @@ export function createOpenAILLMProvider(config?: Partial<AgentConfig>): ILLMProv
     },
 
     async chatStream(messages, onChunk, options) {
+      requireApiKey();
       const startMs = Date.now();
       log.info(`chatStream start: model=${resolved.model}, messages=${msgCount(messages)}, inputChars=${totalChars(messages)}`, {
         model: resolved.model,
