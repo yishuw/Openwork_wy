@@ -63,9 +63,12 @@
         :providers="providerSettings.providers.value"
         :activeProviderId="providerSettings.activeId.value"
         :currentMode="currentMode"
+        :canUndo="canUndo"
+        :undoing="undoing"
         @select-provider="providerSettings.setActive($event)"
         @update:currentMode="agentCtrl.config.value.mode = $event"
         @open-settings="$emit('open-settings')"
+        @undo-write="handleUndoWrite"
       />
     </template>
   </div>
@@ -81,6 +84,7 @@ import { useEditorStore } from '../../stores/editor';
 import { useAgent } from '../../composables/useAgent';
 import { useSessionMessages } from '../../composables/useSessionMessages';
 import { reloadTabsForPaths } from '../../composables/useFileSystem';
+import { createAgentService } from '../../services/agentService';
 import type { DisplayMessage } from '@openwork/agent';
 import ChatSessionTabs from './chat-b/ChatSessionTabs.vue';
 import ChatEmptyState from './chat-b/ChatEmptyState.vue';
@@ -246,6 +250,42 @@ async function send() {
 
 function stopStream() {
   agentCtrl.cancelStream();
+}
+
+// ===== 撤销 Agent 写盘 =====
+const undoing = ref(false);
+const canUndo = ref(true);
+const agentService = createAgentService();
+
+async function handleUndoWrite() {
+  if (undoing.value) return;
+  undoing.value = true;
+  try {
+    const workspaceRoot = editorStore.workspaceRoot || undefined;
+    const workspaceId = editorStore.activeWorkspaceId || undefined;
+    const sessionId = sessionStore.activeSessionId || undefined;
+    const res = await fetch(
+      (typeof __SERVER_PORT__ !== 'undefined' ? `http://localhost:${__SERVER_PORT__}` : '') +
+        '/api/agent/undo',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceRoot, workspaceId, sessionId }),
+      },
+    );
+    const data = await res.json();
+    if (data.ok) {
+      // 恢复后刷新编辑器标签
+      await reloadTabsForPaths([data.path]);
+      webAgentLog.info('undo write ok', { path: data.path });
+    } else {
+      webAgentLog.warn(`undo write: ${data.reason || 'empty stack'}`);
+    }
+  } catch (e: any) {
+    webAgentLog.error(`undo write failed: ${e.message}`);
+  } finally {
+    undoing.value = false;
+  }
 }
 </script>
 

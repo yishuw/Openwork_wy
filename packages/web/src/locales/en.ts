@@ -213,6 +213,7 @@ export default {
     response: 'Response',
     filesModified: ' files modified: ',
     undo: 'Undo',
+    undoAgentWrite: 'Undo last agent file write',
     thinking: 'Thinking...',
     askAgent: 'Ask the agent...',
     send: 'Send',

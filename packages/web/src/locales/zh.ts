@@ -213,6 +213,7 @@ export default {
     response: '回复',
     filesModified: ' 个文件已修改：',
     undo: '撤销',
+    undoAgentWrite: '撤销最近一次 Agent 写盘',
     thinking: '思考中...',
     askAgent: '向 AI 助手提问...',
     send: '发送',

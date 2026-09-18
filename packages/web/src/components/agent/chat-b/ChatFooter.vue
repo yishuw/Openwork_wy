@@ -9,6 +9,16 @@
       <n-button text size="tiny" @click="$emit('open-settings')" :title="t('agent.providerSettings')">
         &#9881;
       </n-button>
+      <n-button
+        text
+        size="tiny"
+        :disabled="!canUndo"
+        :loading="undoing"
+        :title="t('agent.undoAgentWrite')"
+        @click="$emit('undo-write')"
+      >
+        &#8630; {{ t('agent.undo') }}
+      </n-button>
     </n-space>
     <ModeSelector v-model="modeModel" />
   </div>
@@ -26,12 +36,15 @@ const props = defineProps<{
   providers: ProviderConfig[];
   activeProviderId: string | null;
   currentMode: string;
+  canUndo?: boolean;
+  undoing?: boolean;
 }>();
 
 const emit = defineEmits<{
   'select-provider': [id: string];
   'update:currentMode': [mode: string];
   'open-settings': [];
+  'undo-write': [];
 }>();
 
 const modeModel = computed({
