@@ -11,6 +11,11 @@
       "require": "./dist/index.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./sanitize": {
+      "types": "./dist/sanitize.d.ts",
+      "require": "./dist/sanitize.js",
+      "default": "./dist/sanitize.js"
     }
   },
   "scripts": {

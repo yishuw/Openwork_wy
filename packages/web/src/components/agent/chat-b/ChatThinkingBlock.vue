@@ -10,7 +10,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { NCollapseItem, NTag } from 'naive-ui';
-import { sanitizeThinking } from '@openwork/agent';
+import { sanitizeThinking } from '@openwork/agent/sanitize';
 import { renderMarkdown } from '../../../services/markdown';
 import type { DisplayBlock } from '@openwork/agent';
 
