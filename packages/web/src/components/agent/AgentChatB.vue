@@ -71,6 +71,19 @@
         @undo-write="handleUndoWrite"
       />
     </template>
+
+    <!-- 权限确认弹窗 -->
+    <ApprovalDialog
+      :visible="approvalDialog.dialogVisible.value"
+      :toolName="approvalDialog.pendingApproval.value?.toolName || ''"
+      :label="approvalDialog.pendingApproval.value?.label || ''"
+      :preview="approvalDialog.pendingApproval.value?.preview"
+      :mode="approvalDialog.pendingApproval.value?.mode || ''"
+      :errorMessage="approvalDialog.errorMessage.value"
+      @allow="approvalDialog.resolveApproval('allow')"
+      @deny="approvalDialog.resolveApproval('deny')"
+      @retry="approvalDialog.retryApproval()"
+    />
   </div>
 </template>
 
@@ -91,6 +104,8 @@ import ChatEmptyState from './chat-b/ChatEmptyState.vue';
 import ChatMessageItem from './chat-b/ChatMessageItem.vue';
 import ChatInputArea from './chat-b/ChatInputArea.vue';
 import ChatFooter from './chat-b/ChatFooter.vue';
+import ApprovalDialog from './ApprovalDialog.vue';
+import { useApprovalDialog } from '../../composables/useApprovalDialog';
 import { webAgentLog } from '../../services/logger';
 
 defineEmits<{
@@ -104,6 +119,7 @@ const editorStore = useEditorStore();
 const input = ref('');
 
 const agentCtrl = useAgent();
+const approvalDialog = useApprovalDialog();
 
 const { messages: persistedMessages, refresh: refreshMessages } = useSessionMessages(
   () => editorStore.activeWorkspaceId,
@@ -168,10 +184,13 @@ function scheduleScroll(force = false) {
 
 onMounted(() => {
   providerSettings.reload();
+  agentCtrl.setApproveHandler((req) => approvalDialog.openApproval(req));
+  webAgentLog.info('approval handler connected (ApprovalDialog)');
 });
 
 onUnmounted(() => {
   cancelAnimationFrame(scrollRafId);
+  approvalDialog.cancelAllPending();
 });
 
 async function send() {
@@ -218,6 +237,7 @@ async function send() {
       },
       onDone: async () => {
         webAgentLog.info('send(B): streamMessage completed, refreshing from backend');
+        approvalDialog.cancelAllPending();
         try {
           await refreshMessages();
         } catch (e: any) {
