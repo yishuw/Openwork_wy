@@ -72,6 +72,8 @@ export interface AgentOverrides {
   approver?: Approver;
   permissionMode?: PermissionMode;
   undoStack?: FileUndoStack;
+  /** 会话 ID，用于权限确认 SSE 过滤 */
+  sessionId?: string;
 }
 
 /** 判断是否为取消类错误（不计入 FC 失败降级） */
@@ -115,6 +117,7 @@ export class Agent {
   private permissionMode: PermissionMode;
   private readonly approver?: Approver;
   private readonly undoStack: FileUndoStack;
+  private readonly sessionId?: string;
   /** 运行时实际协议；连续失败后变为 fallback_xml → 之后走 XML */
   private activeProtocol: 'xml' | 'fc' | 'fallback_xml';
   private fcFailStreak = 0;
@@ -154,6 +157,7 @@ export class Agent {
     );
     this.approver = overrides?.approver;
     this.undoStack = overrides?.undoStack ?? new FileUndoStack();
+    this.sessionId = overrides?.sessionId;
     this.workspaceRoot = workspaceRoot;
     this.tools = new ToolRegistry();
     for (const tool of createDefaultTools({ enableBash: config.enableBash })) {
@@ -281,6 +285,7 @@ export class Agent {
       params,
       label,
       mode: this.permissionMode,
+      sessionId: this.sessionId,
     };
 
     log.info(`permission required: ${label}`, {

@@ -19,6 +19,35 @@ export interface ApprovalRequest {
   /** 人类可读预览（大参数已截断） */
   label: string;
   mode: PermissionMode;
+  /** 发起此确认的会话 ID（用于 SSE 过滤，避免跨会话污染） */
+  sessionId?: string;
+  /** 发起此确认的工作区 ID */
+  workspaceId?: string;
+}
+
+/** SSE 推送给前端的截断预览（避免传输全量 params） */
+export interface ApprovalPreview {
+  path?: string;
+  commandPreview?: string;
+  contentPreview?: string;
+  oldPreview?: string;
+  newPreview?: string;
+  contentLength?: number;
+}
+
+/**
+ * 构建确认弹窗用的截断预览。
+ * 只保留展示所需字段，content/old/new 均截断。
+ */
+export function buildApprovalPreview(params: Record<string, string>): ApprovalPreview {
+  return {
+    path: params.path,
+    commandPreview: params.command ? previewParam(params.command, 200) : undefined,
+    contentPreview: params.content ? previewParam(params.content, 500) : undefined,
+    oldPreview: params.old ? previewParam(params.old, 300) : undefined,
+    newPreview: params.new ? previewParam(params.new, 300) : undefined,
+    contentLength: params.content?.length,
+  };
 }
 
 export type Approver = (req: ApprovalRequest) => Promise<ApprovalDecision> | ApprovalDecision;

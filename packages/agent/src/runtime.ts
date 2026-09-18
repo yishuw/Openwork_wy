@@ -317,7 +317,7 @@ export class AgentRuntime {
   private getOrCreateSession(sessionId: string): Session {
     let session = this.sessionMap.get(sessionId);
     if (!session) {
-      const agent = this.createAgent(this.getUndoStack(sessionId));
+      const agent = this.createAgent(this.getUndoStack(sessionId), sessionId);
       const memory = new SessionMemory(sessionId, this.config.memoryTokenBudget ?? DEFAULT_MEMORY_TOKEN_BUDGET);
       session = new Session(sessionId, agent, memory);
       this.sessionMap.set(sessionId, session);
@@ -362,7 +362,7 @@ export class AgentRuntime {
 
   /** 用持久化数据恢复 session memory */
   restoreSessionMemory(sessionId: string, data: unknown): void {
-    const agent = this.createAgent(this.getUndoStack(sessionId));
+    const agent = this.createAgent(this.getUndoStack(sessionId), sessionId);
     const memory = new SessionMemory(sessionId, this.config.memoryTokenBudget ?? DEFAULT_MEMORY_TOKEN_BUDGET);
     memory.deserialize(data);
     const session = new Session(sessionId, agent, memory);
@@ -414,7 +414,7 @@ export class AgentRuntime {
     this.agentConfig.model = next.model;
 
     for (const [sessionId, session] of this.sessionMap.entries()) {
-      const agent = this.createAgent(this.getUndoStack(sessionId));
+      const agent = this.createAgent(this.getUndoStack(sessionId), sessionId);
       session.replaceMainAgent(agent);
       session.setPermissionMode(this.config.permissionMode || 'suggest');
     }
@@ -426,7 +426,7 @@ export class AgentRuntime {
 
   // ====================== 内部实现 ======================
 
-  private createAgent(undoStack?: FileUndoStack): Agent {
+  private createAgent(undoStack?: FileUndoStack, sessionId?: string): Agent {
     return new Agent(
       {
         id: 'main',
@@ -443,6 +443,7 @@ export class AgentRuntime {
         approver: this.approver,
         permissionMode: this.config.permissionMode,
         undoStack,
+        sessionId,
       },
     );
   }

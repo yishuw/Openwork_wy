@@ -93,9 +93,11 @@ export {
   resolvePermissionMode,
   nextApprovalId,
   ApprovalBroker,
+  buildApprovalPreview,
   type PermissionMode,
   type ApprovalDecision,
   type ApprovalRequest,
+  type ApprovalPreview,
   type Approver,
 } from './permission';
 
