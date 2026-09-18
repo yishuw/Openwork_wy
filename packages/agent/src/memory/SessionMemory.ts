@@ -1,5 +1,6 @@
 import { createLogger } from '../logger';
 import { LOG_CATEGORY } from '../log-categories';
+import { sanitizeThinking, sanitizeDisplayContent } from '../sanitize';
 import {
   type MemoryEntry,
   type ToolCallRecord,
@@ -317,19 +318,21 @@ export class SessionMemory {
 
         case 'assistant': {
           const blocks: DisplayBlock[] = [];
-          if (entry.thinking) {
+          const cleanThinking = entry.thinking ? sanitizeThinking(entry.thinking) : '';
+          const cleanContent = entry.content ? sanitizeDisplayContent(entry.content) : '';
+          if (cleanThinking) {
             blocks.push({
               id: `${entry.id}_t`,
               type: 'thinking',
-              content: entry.thinking,
+              content: cleanThinking,
               completed: true,
             });
           }
-          if (entry.content) {
+          if (cleanContent) {
             blocks.push({
               id: `${entry.id}_r`,
               type: 'response',
-              content: entry.content,
+              content: cleanContent,
             });
           }
           if (entry.toolCall) {
@@ -338,9 +341,9 @@ export class SessionMemory {
           result.push({
             id: entry.id,
             role: 'assistant',
-            content: entry.content,
+            content: cleanContent,
             timestamp: entry.timestamp,
-            thinking: entry.thinking,
+            thinking: cleanThinking || undefined,
             blocks,
             error: entry.error,
           });

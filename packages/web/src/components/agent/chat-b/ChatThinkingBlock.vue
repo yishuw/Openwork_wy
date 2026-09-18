@@ -10,6 +10,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { NCollapseItem, NTag } from 'naive-ui';
+import { sanitizeThinking } from '@openwork/agent';
 import { renderMarkdown } from '../../../services/markdown';
 import type { DisplayBlock } from '@openwork/agent';
 
@@ -17,7 +18,7 @@ const props = defineProps<{
   block: DisplayBlock & { type: 'thinking' };
 }>();
 
-const renderedHtml = computed(() => renderMarkdown(props.block.content));
+const renderedHtml = computed(() => renderMarkdown(sanitizeThinking(props.block.content || '')));
 </script>
 
 <style scoped>

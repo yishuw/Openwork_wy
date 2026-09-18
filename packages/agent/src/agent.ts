@@ -5,6 +5,7 @@ import type { LLMMessage, ToolCallRecord } from './memory';
 import { ToolRegistry } from './tool-registry';
 import { createDefaultTools } from './tools/index';
 import { parseToolCalls, type ParsedTool } from './parser';
+import { sanitizeThinking, stripToolMarkup } from './sanitize';
 import { createOpenAILLMProvider } from './llm/openai-client';
 import {
   resolveToolProtocol,
@@ -768,8 +769,13 @@ export class Agent {
         }
       }, { signal });
 
-      // 累加 thinking 内容到整轮
-      if (turnThinking) thinkingContent += turnThinking;
+      // 累加 thinking（清洗协议噪声后再入库）
+      if (turnThinking) {
+        const cleanedThinking = sanitizeThinking(turnThinking, this.tools.getTagNames());
+        if (cleanedThinking) {
+          thinkingContent += (thinkingContent ? '\n\n' : '') + cleanedThinking;
+        }
+      }
 
       if (!response) {
         emit({ type: 'done' });
@@ -787,7 +793,11 @@ export class Agent {
       const parsedTools = parseToolCalls(response, this.tools);
 
       if (parsedTools.length > 0) {
-        fullContent += response;
+        // 只把工具标签之外的自然语言写入 content；工具细节由 tool 卡片展示
+        const userText = stripToolMarkup(response, this.tools.getTagNames());
+        if (userText) {
+          fullContent += (fullContent ? '\n\n' : '') + userText;
+        }
 
         for (const tool of parsedTools) {
           toolCalls.push(tool);
@@ -796,6 +806,7 @@ export class Agent {
           const { result, durationMs, fileChanges } = await this.executeToolTimed(tool, signal);
 
           emit({ type: 'tool_result', toolType: tool.type, text: result });
+          // 工具结果仍写入 content，便于调试与单测；展示层会再清洗
           fullContent += `\n\n**[Tool: ${tool.type}]**\n${result}\n`;
           emit({ type: 'tool_end', toolType: tool.type, durationMs, fileChanges });
 
@@ -827,7 +838,10 @@ export class Agent {
         continue;
       }
 
-      fullContent += response;
+      {
+        const finalText = stripToolMarkup(response, this.tools.getTagNames()) || response;
+        fullContent += (fullContent ? '\n\n' : '') + finalText;
+      }
       // 不再向用户展示「响应过长已截断」——该提示曾误伤正常回复；
       // 内存/落盘侧由 SessionMemory token 滑窗与 maxTurns 控制。
       log.info(`Turn ${turns}/${maxTurns}: final response, ${response.length} chars, ${Date.now() - turnStartMs}ms`, {
@@ -948,10 +962,18 @@ export class Agent {
         }
         throw e;
       }
-      if (turnThinking) thinkingContent += turnThinking;
+      if (turnThinking) {
+        const cleanedThinking = sanitizeThinking(turnThinking, this.tools.getTagNames());
+        if (cleanedThinking) {
+          thinkingContent += (thinkingContent ? '\n\n' : '') + cleanedThinking;
+        }
+      }
 
       if (result.content) {
-        fullContent += result.content;
+        const cleanedContent = stripToolMarkup(result.content, this.tools.getTagNames());
+        if (cleanedContent) {
+          fullContent += (fullContent ? '\n\n' : '') + cleanedContent;
+        }
       }
 
       if (result.toolCalls.length === 0) {

@@ -73,6 +73,13 @@ export type AgentRuntimeEventCallback = (event: AgentRuntimeEvent) => void;
 const DEFAULT_SYSTEM_PROMPT = [
   'You are an autonomous coding agent. Your goal is to understand, plan, and execute code changes.',
   '',
+  '## Answering Questions',
+  'When the user asks about a project, experiment, file, or code:',
+  '- Explore first with read-only tools (`list_dir`, `read_file`, `grep`, `glob`).',
+  '- Open the relevant files/folders before answering. Do not stop at a parent directory listing',
+  '  if the question is about something inside it.',
+  '- Answer in clear natural language (Markdown is fine). Ground claims in what you actually read.',
+  '',
   '## Making Changes',
   '',
   'You have THREE file tools. Their priority is fixed:',
@@ -94,7 +101,11 @@ const DEFAULT_SYSTEM_PROMPT = [
   '   in the file. Add surrounding context lines if it is not unique, or set replace_all="true".',
   '4. With `file_write`, the body is the COMPLETE final file content (no code fences).',
   '5. Think step by step: explore → plan → execute → explain.',
-  '6. Only invoke file tools when the user explicitly asks for file changes.',
+  '6. Use read-only tools freely to answer questions. Only use write tools (`file_edit`, `file_write`)',
+  '   when the user explicitly asks for file changes.',
+  '7. User-facing replies must be plain natural language / Markdown.',
+  '   Never leave tool-call markup (XML tags, DSML, function-call syntax) in your final answer.',
+  '8. In reasoning, describe intent in natural language. Do not emit tool-call markup there.',
 ].join('\n');
 
 export class AgentRuntime {
