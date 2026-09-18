@@ -7,6 +7,7 @@ import {
   type IDESnapshot,
 } from '@openwork/agent';
 import { createLogger } from '@openwork/agent';
+import { buildApprovalPreview } from '@openwork/agent';
 import { loadEnabledMcpServers } from './mcp';
 import type { WorkspaceManager } from '../workspace/manager';
 import type { LLMGateway } from '@openwork/agent';
@@ -195,13 +196,18 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
     };
 
     // 将本连接接到确认代理：pending 时把 approval_required 推给前端
-    const unsubscribeApproval = approvalBroker.subscribe((req) => {
+    const requestSessionId = sessionId || 'default';
+    const unsubscribeApproval = approvalBroker.subscribe((approvalReq) => {
+      // 仅推送与当前请求匹配的 approval（无 sessionId 的旧事件仍推送，前端兜底）
+      if (approvalReq.sessionId && approvalReq.sessionId !== requestSessionId) return;
       writeSSE({
         approval_required: {
-          approvalId: req.approvalId,
-          toolName: req.toolName,
-          label: req.label,
-          mode: req.mode,
+          approvalId: approvalReq.approvalId,
+          toolName: approvalReq.toolName,
+          label: approvalReq.label,
+          mode: approvalReq.mode,
+          preview: buildApprovalPreview(approvalReq.params),
+          sessionId: approvalReq.sessionId,
         },
       });
     });
