@@ -2,7 +2,6 @@ import { ref } from 'vue';
 import type { ApprovalRequiredEvent } from '../services/agentService';
 import { createAgentService } from '../services/agentService';
 import { webAgentLog } from './logger';
-import { i18n } from '../locales';
 
 const APPROVAL_CLIENT_TIMEOUT_MS = 55_000;
 
@@ -16,9 +15,11 @@ export function useApprovalDialog() {
   const agentService = createAgentService();
 
   function openApproval(req: ApprovalRequiredEvent): Promise<'allow' | 'deny'> {
-    // 若已有未完成请求，先 deny 前一个
-    if (resolver) {
-      webAgentLog.warn('openApproval: previous request auto-denied');
+    // 若已有未完成请求，先 POST deny 到服务端，再关闭旧弹窗
+    if (resolver && pendingApproval.value) {
+      const oldId = pendingApproval.value.approvalId;
+      webAgentLog.warn(`openApproval: auto-deny previous request ${oldId}`);
+      void agentService.sendApproval(oldId, 'deny').catch(() => { /* best-effort */ });
       resolver('deny');
     }
 
@@ -30,7 +31,6 @@ export function useApprovalDialog() {
     if (timeoutTimer) clearTimeout(timeoutTimer);
     timeoutTimer = setTimeout(() => {
       webAgentLog.warn('approval client timeout, auto-deny');
-      errorMessage.value = i18n.global.t('approval.timeout');
       void resolveApproval('deny');
     }, APPROVAL_CLIENT_TIMEOUT_MS);
 
@@ -69,7 +69,12 @@ export function useApprovalDialog() {
   function cancelAllPending(): void {
     if (timeoutTimer) clearTimeout(timeoutTimer);
     timeoutTimer = null;
+    const req = pendingApproval.value;
     if (resolver) {
+      // 通知服务端 deny，避免 broker 等到 60s 超时
+      if (req) {
+        void agentService.sendApproval(req.approvalId, 'deny').catch(() => { /* best-effort */ });
+      }
       resolver('deny');
     }
     cleanup();

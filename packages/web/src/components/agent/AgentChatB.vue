@@ -97,7 +97,6 @@ import { useEditorStore } from '../../stores/editor';
 import { useAgent } from '../../composables/useAgent';
 import { useSessionMessages } from '../../composables/useSessionMessages';
 import { reloadTabsForPaths } from '../../composables/useFileSystem';
-import { createAgentService } from '../../services/agentService';
 import type { DisplayMessage } from '@openwork/agent';
 import ChatSessionTabs from './chat-b/ChatSessionTabs.vue';
 import ChatEmptyState from './chat-b/ChatEmptyState.vue';
@@ -275,7 +274,6 @@ function stopStream() {
 // ===== 撤销 Agent 写盘 =====
 const undoing = ref(false);
 const canUndo = ref(true);
-const agentService = createAgentService();
 
 async function handleUndoWrite() {
   if (undoing.value) return;
