@@ -57,6 +57,7 @@ const emit = defineEmits<{
 }>();
 
 const settings = useSettingsStore();
+const { t } = useI18n();
 
 const permissionOptions = computed(() => [
   { label: t('settings.permSuggest'), value: 'suggest' as PermissionModeSetting },
@@ -68,8 +69,6 @@ const modeModel = computed({
   get: () => props.currentMode as 'build' | 'plan',
   set: (val) => emit('update:currentMode', val),
 });
-
-const { t } = useI18n();
 </script>
 
 <style scoped>

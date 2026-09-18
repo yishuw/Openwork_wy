@@ -6,8 +6,7 @@ import {
   type AgentContext,
   type IDESnapshot,
 } from '@openwork/agent';
-import { createLogger } from '@openwork/agent';
-import { buildApprovalPreview } from '@openwork/agent';
+import { createLogger, buildApprovalPreview } from '@openwork/agent';
 import { loadEnabledMcpServers } from './mcp';
 import type { WorkspaceManager } from '../workspace/manager';
 import type { LLMGateway } from '@openwork/agent';

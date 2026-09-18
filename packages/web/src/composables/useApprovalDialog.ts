@@ -47,7 +47,7 @@ export function useApprovalDialog() {
     try {
       const result = await agentService.sendApproval(req.approvalId, decision);
       if (!result.success) {
-        errorMessage.value = i18n.global.t('approval.alreadyResolved');
+        // 服务端已 resolve（超时/重复），直接关闭弹窗
         resolver('deny');
         cleanup();
         return;

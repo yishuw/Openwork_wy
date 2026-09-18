@@ -100,11 +100,9 @@ function collectFileTreePaths(entries: any[], basePath: string): string[] {
 export function useAgent() {
   const isProcessing = ref(false);
   const settings = useSettingsStore();
-  /** 桌面默认：协议 auto、权限 auto-edit（可在设置中改） */
+  /** 桌面默认：协议 auto、权限 auto-edit（可在设置/ChatFooter 中改） */
   const config = ref<AgentConfig>({
     mode: 'build',
-    permissionMode: settings.permissionMode,
-    toolProtocol: settings.toolProtocol,
   });
   const service = createAgentService();
   const liveMessage = ref<DisplayMessage | null>(null);
@@ -128,8 +126,9 @@ export function useAgent() {
       mode: 'build',
       ...config.value,
       providerId: provider?.id || undefined,
-      permissionMode: config.value.permissionMode || settings.permissionMode || 'auto-edit',
-      toolProtocol: config.value.toolProtocol || settings.toolProtocol || 'auto',
+      // 始终从 settings 读取，保证 ChatFooter/设置页切换即时生效
+      permissionMode: settings.permissionMode || 'auto-edit',
+      toolProtocol: settings.toolProtocol || 'auto',
     };
   }
 
