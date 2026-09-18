@@ -105,6 +105,7 @@ export default {
     cancel: '取消',
     open: '打开',
     thisComputer: '此电脑',
+    drives: '磁盘',
     newFolder: '新建文件夹',
     goParent: '上级目录',
     folderName: '文件夹名称',

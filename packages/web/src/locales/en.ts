@@ -105,6 +105,7 @@ export default {
     cancel: 'Cancel',
     open: 'Open',
     thisComputer: 'This PC',
+    drives: 'Drives',
     newFolder: 'New Folder',
     goParent: 'Parent Dir',
     folderName: 'Folder name',
