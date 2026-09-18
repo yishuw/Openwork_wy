@@ -2,6 +2,7 @@ import { ref } from 'vue';
 import type { ApprovalRequiredEvent } from '../services/agentService';
 import { createAgentService } from '../services/agentService';
 import { webAgentLog } from './logger';
+import { i18n } from '../locales';
 
 const APPROVAL_CLIENT_TIMEOUT_MS = 55_000;
 
