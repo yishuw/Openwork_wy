@@ -122,6 +122,8 @@ export class Agent {
   /** 运行时实际协议；连续失败后变为 fallback_xml → 之后走 XML */
   private activeProtocol: 'xml' | 'fc' | 'fallback_xml';
   private fcFailStreak = 0;
+  /** 本轮 execute 内最近工具调用 key，用于拦截无意义重复 */
+  private recentToolCalls: string[] = [];
   /**
    * 本 Agent 会话内已 read 过的文件路径集合(规范化绝对路径)。
    * 由 FileReadTool 写入;FileEditTool / FileWriteTool 读取做前置校验。
@@ -341,6 +343,7 @@ export class Agent {
     onToolCall?: ToolCallReportCallback,
     signal?: AbortSignal,
   ): Promise<AgentResult> {
+    this.recentToolCalls = [];
     if (this.effectiveProtocol() === 'fc' && this.provider.chatWithTools) {
       return this.executeWithFunctionCalling(messages, onEvent, onToolCall, signal);
     }
@@ -720,6 +723,7 @@ export class Agent {
     onToolCall?: ToolCallReportCallback,
     signal?: AbortSignal
   ): Promise<AgentResult> {
+    this.recentToolCalls = [];
     if (
       this.effectiveProtocol() === 'fc' &&
       this.provider.chatStreamWithTools
@@ -839,8 +843,15 @@ export class Agent {
       }
 
       {
-        const finalText = stripToolMarkup(response, this.tools.getTagNames()) || response;
-        fullContent += (fullContent ? '\n\n' : '') + finalText;
+        // 展示正文只保留自然语言；不要把无法解析的工具标记原样入库（否则 UI 会被洗成空白）
+        const cleanedFinal = stripToolMarkup(response, this.tools.getTagNames());
+        if (cleanedFinal) {
+          fullContent += (fullContent ? '\n\n' : '') + cleanedFinal;
+        } else if (response.trim()) {
+          const note = '*[模型回复仅含无法解析的工具标记，已过滤]*';
+          fullContent += (fullContent ? '\n\n' : '') + note;
+          emit({ type: 'chunk', text: note });
+        }
       }
       // 不再向用户展示「响应过长已截断」——该提示曾误伤正常回复；
       // 内存/落盘侧由 SessionMemory token 滑窗与 maxTurns 控制。
@@ -1115,6 +1126,17 @@ export class Agent {
     if (signal?.aborted) {
       return { result: 'Error: aborted before tool execution', durationMs: 0 };
     }
+
+    // 拦截同参数连续重复调用，避免模型在失败后无限重试刷屏
+    const callKey = `${tool.type}|${JSON.stringify(tool.params)}`;
+    const repeatCount = this.recentToolCalls.filter(k => k === callKey).length;
+    if (repeatCount >= 2) {
+      const result = `Skipped: \`${tool.type}\` with identical arguments was already called ${repeatCount + 1} times. Do not retry. Use another tool/path or write the final answer.`;
+      log.warn(`tool repeat guard: ${tool.type} x${repeatCount + 1}`, { ...this.logBaseMeta(), toolName: tool.type });
+      return { result, durationMs: 0 };
+    }
+    this.recentToolCalls.push(callKey);
+    if (this.recentToolCalls.length > 30) this.recentToolCalls.shift();
 
     const approved = await this.gateApproval(impl, tool.params);
     if (approved !== true) {

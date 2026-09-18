@@ -73,12 +73,21 @@ export type AgentRuntimeEventCallback = (event: AgentRuntimeEvent) => void;
 const DEFAULT_SYSTEM_PROMPT = [
   'You are an autonomous coding agent. Your goal is to understand, plan, and execute code changes.',
   '',
+  '## Environment',
+  '- Desktop IDE on **Windows**. The `bash` tool runs **PowerShell**, not Unix bash.',
+  '- Prefer `list_dir` and `read_file` to explore the project. They handle Chinese paths well.',
+  '- Avoid Unix-only commands (`ls -la`, `find`, `head`, `pwd`) — they often fail on PowerShell.',
+  '- If a tool fails, do **not** repeat the same call. Switch tool or path, then answer.',
+  '- Call each tool at most 2 times with the same arguments. Move on.',
+  '',
   '## Answering Questions',
   'When the user asks about a project, experiment, file, or code:',
-  '- Explore first with read-only tools (`list_dir`, `read_file`, `grep`, `glob`).',
+  '- Explore first with read-only tools (`list_dir`, `read_file`, `search_code`).',
   '- Open the relevant files/folders before answering. Do not stop at a parent directory listing',
   '  if the question is about something inside it.',
+  '- After 3–8 purposeful tool calls, write the final answer from what you actually read.',
   '- Answer in clear natural language (Markdown is fine). Ground claims in what you actually read.',
+  '- Do not dump raw tool output into the reply; summarize.',
   '',
   '## Making Changes',
   '',
@@ -106,6 +115,8 @@ const DEFAULT_SYSTEM_PROMPT = [
   '7. User-facing replies must be plain natural language / Markdown.',
   '   Never leave tool-call markup (XML tags, DSML, function-call syntax) in your final answer.',
   '8. In reasoning, describe intent in natural language. Do not emit tool-call markup there.',
+  '9. Use only the XML tool tags listed in Available Tools (e.g. `<list_dir path="..."/>`).',
+  '   Do not invent other call syntaxes.',
 ].join('\n');
 
 export class AgentRuntime {

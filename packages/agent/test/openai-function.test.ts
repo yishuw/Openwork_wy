@@ -22,11 +22,11 @@ describe('toolToOpenAIFunction', () => {
     const fns = tools.map(toolToOpenAIFunction);
     expect(fns).toHaveLength(7);
     expect(fns.map((f) => f.function.name)).toEqual([
+      'list_dir',
+      'read_file',
+      'search_code',
       'file_edit',
       'file_write',
-      'read_file',
-      'list_dir',
-      'search_code',
       'bash',
       'delegate',
     ]);
@@ -80,7 +80,7 @@ describe('ToolRegistry.listOpenAITools', () => {
     const registry = new ToolRegistry();
     for (const t of createDefaultTools()) registry.register(t);
     const names = registry.listOpenAITools().map((f) => f.function.name);
-    expect(names[0]).toBe('file_edit');
+    expect(names[0]).toBe('list_dir');
     expect(names).toHaveLength(registry.size);
   });
 

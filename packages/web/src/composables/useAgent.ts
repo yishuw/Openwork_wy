@@ -71,11 +71,14 @@ export function buildAgentSnapshot(activeFilePath?: string): IDESnapshot {
 }
 
 function collectFileTreePaths(entries: any[], basePath: string): string[] {
+  // 目录也要进树：否则 IDE 快照只有根下零星文件（如 keilkill.bat），Agent 会误判项目为空
   const paths: string[] = [];
-  for (const entry of entries) {
-    if (entry.isDirectory) continue;
+  const MAX = 400;
+  for (const entry of entries || []) {
+    if (paths.length >= MAX) break;
+    if (!entry?.name) continue;
     const full = basePath ? `${basePath}/${entry.name}` : entry.name;
-    paths.push(full);
+    paths.push(entry.isDirectory ? `${full}/` : full);
   }
   return paths;
 }

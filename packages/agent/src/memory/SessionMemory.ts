@@ -170,8 +170,12 @@ export class SessionMemory {
     }
 
     if (snapshot.fileTree && snapshot.fileTree.length > 0) {
+      const tree = snapshot.fileTree.slice(0, 200);
       parts.push('\n## Project File Tree');
-      parts.push(snapshot.fileTree.join('\n'));
+      parts.push(tree.join('\n'));
+      if (snapshot.fileTree.length > tree.length) {
+        parts.push(`... (${snapshot.fileTree.length - tree.length} more entries; use list_dir to explore)`);
+      }
     }
 
     if (snapshot.cursorPosition) {
@@ -319,7 +323,12 @@ export class SessionMemory {
         case 'assistant': {
           const blocks: DisplayBlock[] = [];
           const cleanThinking = entry.thinking ? sanitizeThinking(entry.thinking) : '';
-          const cleanContent = entry.content ? sanitizeDisplayContent(entry.content) : '';
+          let cleanContent = entry.content ? sanitizeDisplayContent(entry.content) : '';
+          // 清洗后正文为空、但 thinking 有内容时，不要让 UI 完全空白：
+          // 保留 thinking 块；正文用占位提示（避免用户以为没有输出）
+          if (!cleanContent && cleanThinking && !entry.toolCall) {
+            cleanContent = '*[无额外正文，详见思考过程]*';
+          }
           if (cleanThinking) {
             blocks.push({
               id: `${entry.id}_t`,

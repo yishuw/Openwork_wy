@@ -13,26 +13,34 @@
 
   <!-- 助手消息 -->
   <div v-else-if="message.role === 'assistant'" class="msg-assistant">
-    <template v-if="message.blocks && message.blocks.length > 0">
-      <!-- 思考块: 可折叠组 -->
-      <n-collapse v-if="thinkingBlocks.length > 0">
-        <ChatThinkingBlock
-          v-for="block in thinkingBlocks"
-          :key="block.id"
-          :block="block"
-        />
-      </n-collapse>
-      <!-- 工具调用: 单行简讯, 不折叠 -->
-      <ChatToolBlock
-        v-for="block in toolBlocks"
+    <!-- 思考块: 无正文时默认展开，避免「看起来没有输出」 -->
+    <n-collapse
+      v-if="thinkingBlocks.length > 0"
+      :default-expanded-names="defaultThinkingNames"
+    >
+      <ChatThinkingBlock
+        v-for="block in thinkingBlocks"
         :key="block.id"
         :block="block"
       />
-      <!-- 回复块: 正文 -->
-      <div v-for="block in responseBlocks" :key="block.id" class="msg-response-wrapper">
-        <ChatResponseBlock :content="block.content" />
-      </div>
-    </template>
+    </n-collapse>
+    <!-- 工具调用: 单行简讯, 不折叠 -->
+    <ChatToolBlock
+      v-for="block in toolBlocks"
+      :key="block.id"
+      :block="block"
+    />
+    <!-- 回复块: 正文 -->
+    <div v-for="block in responseBlocks" :key="block.id" class="msg-response-wrapper">
+      <ChatResponseBlock :content="block.content" />
+    </div>
+    <!-- 兜底: blocks 缺失/为空时仍展示 content，避免整条消息空白 -->
+    <div
+      v-if="showContentFallback"
+      class="msg-response-wrapper msg-fallback"
+    >
+      <ChatResponseBlock :content="message.content || fallbackText" />
+    </div>
   </div>
 </template>
 
@@ -57,6 +65,20 @@ const toolBlocks = computed(() =>
 const responseBlocks = computed(() =>
   (props.message.blocks || []).filter(b => b.type === 'response') as (DisplayBlock & { type: 'response' })[]
 );
+
+/** 无正文时默认展开思考，让用户至少能看到模型在做什么 */
+const defaultThinkingNames = computed(() => {
+  if (responseBlocks.value.length > 0) return [];
+  return thinkingBlocks.value.map(b => b.id);
+});
+
+const showContentFallback = computed(() => {
+  if (responseBlocks.value.length > 0) return false;
+  const c = (props.message.content || '').trim();
+  return c.length > 0;
+});
+
+const fallbackText = '*[无额外正文，详见思考过程]*';
 </script>
 
 <style scoped>
@@ -80,5 +102,9 @@ const responseBlocks = computed(() =>
 }
 .msg-response-wrapper {
   padding: 8px 12px;
+}
+.msg-fallback {
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 </style>

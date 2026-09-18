@@ -28,12 +28,13 @@ export { FileEditTool } from './file-edit';
  * enableBash=false 时 bash 工具不会注册(不进系统提示词,LLM 不会尝试调用)。
  */
 export function createDefaultTools(options?: { enableBash?: boolean }): ITool[] {
+  // 探索类工具靠前：问答场景优先 list_dir/read_file，减少 bash 误用
   const tools: ITool[] = [
+    new ListDirTool(),
+    new FileReadTool(),
+    new SearchCodeTool(),
     new FileEditTool(),
     new FileWriteTool(),
-    new FileReadTool(),
-    new ListDirTool(),
-    new SearchCodeTool(),
   ];
   if (options?.enableBash !== false) {
     tools.push(new BashTool());
