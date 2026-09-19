@@ -763,20 +763,13 @@ export class Agent {
 
       // 每轮开始前重置 thinking 累积(每轮独立的 thinking)
       let turnThinking = '';
-      let lastEmittedThinking = '';
 
       const response = await this.provider.chatStream(localMessages, (type, text) => {
         if (type === 'thinking') {
+          // 实时推送模型原始 thinking 分片；展示清洗放在前端/落库侧。
+          // 注意：这里绝不能把「整段 cleaned」当增量反复 emit，否则前端 append 会重复。
           turnThinking += text;
-          // 实时只推送「已清洗」的增量，避免协议标签闪现在思考流里
-          const cleaned = sanitizeThinking(turnThinking, this.tools.getTagNames());
-          if (cleaned.length > lastEmittedThinking.length && cleaned.startsWith(lastEmittedThinking)) {
-            emit({ type: 'thinking', text: cleaned.slice(lastEmittedThinking.length) });
-            lastEmittedThinking = cleaned;
-          } else if (cleaned && cleaned !== lastEmittedThinking) {
-            emit({ type: 'thinking', text: cleaned });
-            lastEmittedThinking = cleaned;
-          }
+          emit({ type: 'thinking', text });
         } else if (type === 'content') {
           emit({ type: 'chunk', text });
         }

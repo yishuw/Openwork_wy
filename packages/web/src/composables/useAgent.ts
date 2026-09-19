@@ -176,6 +176,10 @@ export function useAgent() {
     let blockIdCounter = 0;
     const changedPaths = new Set<string>();
     const nextBlockId = () => `${liveId}_blk${blockIdCounter++}`;
+    /** 整次请求的原始 thinking 分片（liveMessage 汇总用） */
+    let streamRawThinking = '';
+    /** 当前思考块自己的原始分片，避免跨块重复拼接 */
+    let currentBlockRawThinking = '';
 
     function finishBlock() {
       if (activeBlock) {
@@ -199,6 +203,8 @@ export function useAgent() {
     function ensureThinkingBlock() {
       if (activeBlock && activeBlock.type === 'thinking') return;
       finishBlock();
+      // 新思考块从空开始，避免把整段历史 thinking 再塞进新块造成重复
+      currentBlockRawThinking = '';
       pushBlock({ id: nextBlockId(), type: 'thinking', content: '', completed: false });
     }
 
@@ -243,9 +249,6 @@ export function useAgent() {
       const store = useEditorStore();
       const ideSnapshot = buildAgentSnapshot(activeFilePath);
 
-      // 实时 thinking：原始分片单独累积，展示侧每次整体清洗，避免流式标签闪现
-      let rawThinking = '';
-
       await service.streamMessage(
         content,
         {
@@ -259,12 +262,12 @@ export function useAgent() {
           if (!liveMessage.value) return;
           if (type === 'thinking') {
             ensureThinkingBlock();
-            rawThinking += text;
-            const cleanedThinking = sanitizeThinking(rawThinking);
+            streamRawThinking += text;
+            currentBlockRawThinking += text;
             if (activeBlock && activeBlock.type === 'thinking') {
-              activeBlock.content = cleanedThinking;
+              activeBlock.content = sanitizeThinking(currentBlockRawThinking);
             }
-            liveMessage.value.thinking = cleanedThinking;
+            liveMessage.value.thinking = sanitizeThinking(streamRawThinking);
           } else {
             ensureResponseBlock();
             contentBuffer.push(text);
