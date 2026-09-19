@@ -107,6 +107,41 @@ export function stripToolMarkup(text: string, toolNames: readonly string[] = COM
   // 流式过程中可能出现「未闭合」的协议标签尾巴，一并去掉
   s = stripIncompleteMarkupTail(s, toolNames);
 
+  // 模型有时把英文过程叙述写进 content/thinking，展示时剥掉
+  s = stripProcessNarration(s);
+
+  s = s.replace(/[ \t]+\n/g, '\n');
+  s = s.replace(/\n{3,}/g, '\n\n').trim();
+  return s;
+}
+
+/** 纯英文「探索过程」整行（不含 CJK 时才整行删除） */
+const PROCESS_EN_LINE =
+  /^(?:Let me\b|I (?:need to|will|should|have to|can|'ll)\s+(?:actually\s+)?(?:call|explore|look|read|list|try|structure|output|do it|check)\b|I am not\b|I'm not\b|Hmm[,.\s]|Wait[,.\s]|OK[,.\s]+(?:I|let)\b|Actually[,.\s]+let\b|I keep\b|readme is GBK\b).*$/i;
+
+/** 从句段中剥离英文过程叙述，保留中文结论/技术说明 */
+export function stripProcessNarration(text: string): string {
+  if (!text) return '';
+  const lines = text.split('\n');
+  const kept: string[] = [];
+  for (const line of lines) {
+    const hasCjk = /[\u4e00-\u9fff]/.test(line);
+    if (!hasCjk && PROCESS_EN_LINE.test(line.trim())) {
+      continue; // 整行英文过程 → 丢弃
+    }
+    if (hasCjk) {
+      // 混排行：去掉句首英文过程片段，保留中文
+      kept.push(
+        line.replace(
+          /^(?:Let me\b|I need to\b|I will\b|I'll\b|Hmm[,.\s]|Wait[,.\s]|OK[,.\s]+I\b|Actually[,.\s]+let\b|I keep\b)[^。！？\n]{0,160}?(?=[\u4e00-\u9fff])/gim,
+          '',
+        ),
+      );
+      continue;
+    }
+    kept.push(line);
+  }
+  let s = kept.join('\n');
   s = s.replace(/[ \t]+\n/g, '\n');
   s = s.replace(/\n{3,}/g, '\n\n').trim();
   return s;

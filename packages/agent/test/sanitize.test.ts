@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { stripToolMarkup, sanitizeThinking, sanitizeDisplayContent, COMMON_TOOL_NAMES } from '../src/sanitize';
+import {
+  stripToolMarkup,
+  stripProcessNarration,
+  sanitizeThinking,
+  sanitizeDisplayContent,
+  COMMON_TOOL_NAMES,
+} from '../src/sanitize';
 
 describe('sanitize / stripToolMarkup', () => {
   it('keeps natural language', () => {
@@ -99,5 +105,32 @@ describe('sanitize / stripToolMarkup', () => {
     const part1 = '先列目录。\n<list_dir path="';
     const part2 = 'G:\\x"/>';
     expect(sanitizeThinking(part1 + part2)).toBe('先列目录。');
+  });
+
+  it('strips English process narration from display content', () => {
+    const raw = [
+      '我来看看"实验1"的结构和代码。',
+      'Let me explore further.',
+      'I need to actually call the tools. Let me structure them.我先探索一下目录。',
+      'Hmm, I keep writing the calls.',
+      '好的，下面给你介绍。',
+      '',
+      '一、实验目的',
+      '学习 GPIO 输出。',
+    ].join('\n');
+    const out = sanitizeDisplayContent(raw);
+    expect(out).toContain('一、实验目的');
+    expect(out).toContain('学习 GPIO');
+    expect(out).toContain('好的，下面给你介绍');
+    expect(out).toContain('我先探索一下目录');
+    expect(out).not.toMatch(/Let me explore/i);
+    expect(out).not.toMatch(/I need to actually call/i);
+    expect(out).not.toMatch(/^Hmm,/im);
+  });
+
+  it('keeps legitimate English technical sentences that are not process logs', () => {
+    const out = sanitizeDisplayContent('Use HAL_GPIO_WritePin to drive the pin.\nThe LED is on PB5.');
+    expect(out).toContain('HAL_GPIO_WritePin');
+    expect(out).toContain('PB5');
   });
 });

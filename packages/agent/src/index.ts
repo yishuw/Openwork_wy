@@ -43,6 +43,7 @@ export { parseToolCalls, type ParsedTool } from './parser';
 export {
   stripToolMarkup,
   stripToolResultBlocks,
+  stripProcessNarration,
   sanitizeThinking,
   sanitizeDisplayContent,
   COMMON_TOOL_NAMES,

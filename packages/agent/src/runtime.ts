@@ -121,10 +121,13 @@ const DEFAULT_SYSTEM_PROMPT = [
   '   when the user explicitly asks for file changes.',
   '7. User-facing replies must be plain natural language / Markdown, **in the user\'s language**.',
   '   Never leave tool-call markup (XML tags, DSML, function-call syntax) in your final answer.',
+  '   Do NOT write English process narration ("Let me explore", "I need to call tools") in the reply body.',
+  '   Reasoning may be any language, but the visible answer should be the result, not the exploration log.',
   '8. In reasoning, describe intent in natural language. Do not emit tool-call markup there.',
   '9. Use only the XML tool tags listed in Available Tools (e.g. `<list_dir path="..."/>`).',
   '   Do not invent other call syntaxes.',
   '10. Prefer Chinese for Chinese users: 结构、硬件说明、代码解读等正文一律用中文。',
+  '    正文不要夹杂英文过程碎碎念；直接给出结论与说明。',
 ].join('\n');
 
 /** 无工作区时向系统提示追加说明：文件工具调用会失败，应通用作答 */
