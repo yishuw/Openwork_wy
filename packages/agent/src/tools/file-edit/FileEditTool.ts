@@ -3,6 +3,7 @@ import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } fr
 import { createLogger } from '../../logger';
 import { LOG_CATEGORY } from '../../log-categories';
 import { resolveKey } from '../_shared/path';
+import { hasWorkspaceRoot, missingWorkspaceToolError } from '../_shared/workspace-gate';
 import { buildEditHunk } from '../_shared/file-change';
 import {
   FILE_EDIT_TOOL_NAME,
@@ -46,6 +47,7 @@ export class FileEditTool implements ITool {
   readonly body = FILE_EDIT_BODY_KIND;
 
   async execute(params: Record<string, string>, context: ToolExecutionContext): Promise<string> {
+    if (!hasWorkspaceRoot(context.workspaceRoot)) return missingWorkspaceToolError();
     const startMs = Date.now();
     const target = params.path;
     const oldString = params.old ?? '';

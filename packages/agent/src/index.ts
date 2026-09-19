@@ -11,7 +11,14 @@ export {
   type AgentRuntimeEvent,
   type AgentRuntimeEventCallback,
   type ChatResult,
+  resolveEffectiveSystemPrompt,
 } from './runtime';
+
+export {
+  MISSING_WORKSPACE_TOOL_ERROR,
+  missingWorkspaceToolError,
+  hasWorkspaceRoot,
+} from './tools/_shared/workspace-gate';
 
 export {
   Agent,

@@ -2,6 +2,7 @@ import { exec } from 'child_process';
 import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } from '../../types/tool';
 import { createLogger } from '../../logger';
 import { LOG_CATEGORY } from '../../log-categories';
+import { hasWorkspaceRoot, missingWorkspaceToolError } from '../_shared/workspace-gate';
 import {
   BASH_TOOL_NAME,
   BASH_TOOL_DESCRIPTION,
@@ -63,6 +64,7 @@ export class BashTool implements ITool {
   readonly annotations = annotations;
 
   async execute(params: Record<string, string>, context: ToolExecutionContext): Promise<string> {
+    if (!hasWorkspaceRoot(context.workspaceRoot)) return missingWorkspaceToolError();
     const command = (params.command || '').trim();
     if (!command) return 'Error: No command provided';
 

@@ -230,6 +230,8 @@ export default {
     noSessionPrompt: 'Click + to start a new session',
     noWorkspaceTitle: 'No Workspace Open',
     noWorkspaceDesc: 'Open a folder to start chatting with the AI agent and edit files.',
+    noWorkspaceChatHint: 'No workspace is open. You can still chat (general Q&A). Open a workspace to enable file tools.',
+    openWorkspace: 'Open workspace',
   },
   approval: {
     title: 'Tool Confirmation',

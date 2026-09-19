@@ -1,4 +1,5 @@
 import type { ITool, ToolInputSchema, ToolExecutionContext } from '../../types/tool';
+import { hasWorkspaceRoot, missingWorkspaceToolError } from '../_shared/workspace-gate';
 import {
   DELEGATE_TOOL_NAME,
   DELEGATE_TOOL_DESCRIPTION,
@@ -21,7 +22,8 @@ export class DelegateTool implements ITool {
   readonly inputSchema = inputSchema;
 
   /** Session 会拦截委托并在后置处理中真正启动子 Agent */
-  async execute(params: Record<string, string>, _context: ToolExecutionContext): Promise<string> {
+  async execute(params: Record<string, string>, context: ToolExecutionContext): Promise<string> {
+    if (!hasWorkspaceRoot(context.workspaceRoot)) return missingWorkspaceToolError();
     return `[Delegation to "${params.agent}" recorded — Session will handle it]`;
   }
 }

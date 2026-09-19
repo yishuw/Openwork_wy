@@ -127,6 +127,19 @@ const DEFAULT_SYSTEM_PROMPT = [
   '10. Prefer Chinese for Chinese users: 结构、硬件说明、代码解读等正文一律用中文。',
 ].join('\n');
 
+/** 无工作区时向系统提示追加说明：文件工具调用会失败，应通用作答 */
+export function resolveEffectiveSystemPrompt(base: string, workspaceRoot?: string): string {
+  const root = (workspaceRoot || '').trim();
+  if (root) return base;
+  return (
+    base +
+    '\n\n## Workspace' +
+    '\nNo workspace is open. File tools (list_dir/read_file/bash/edit) are registered but will return an error.' +
+    '\nAnswer general questions from your knowledge. If the user needs file access, tell them to open a workspace first.' +
+    '\n当前未打开工作区：文件工具不可用，请直接用通用知识回答；需要读写文件时请用户先打开工作区。'
+  );
+}
+
 export class AgentRuntime {
   private config: AgentRuntimeConfig;
   private agentConfig: AgentConfig;
@@ -160,7 +173,8 @@ export class AgentRuntime {
   }
 
   private createDefaultFS(rootPath: string): IAgentFileSystem {
-    const root = path.resolve(rootPath);
+    // 无工作区时 root 为空串：工具层会拦截；此处避免 path.resolve(undefined) 抛错
+    const root = path.resolve(rootPath || '');
     const resolve = (relative: string): string => resolvePath(root, relative);
 
     return {
@@ -257,7 +271,17 @@ export class AgentRuntime {
       // plan 模式保持原行为:不走 memory,直接 buildMessages
       const context = payload as AgentContext;
       const provider = createOpenAILLMProvider(this.agentConfig);
-      const messages = buildMessages(this.agentConfig, message, context);
+      const messages = buildMessages(
+        {
+          ...this.agentConfig,
+          systemPrompt: resolveEffectiveSystemPrompt(
+            this.agentConfig.systemPrompt || DEFAULT_SYSTEM_PROMPT,
+            this.config.workspaceRoot,
+          ),
+        },
+        message,
+        context,
+      );
       const content = await provider.chat(messages, { signal });
       return this.buildResult(content, 1, []);
     }
@@ -461,7 +485,10 @@ export class AgentRuntime {
       {
         id: 'main',
         name: 'Main Agent',
-        systemPrompt: this.agentConfig.systemPrompt || DEFAULT_SYSTEM_PROMPT,
+        systemPrompt: resolveEffectiveSystemPrompt(
+          this.agentConfig.systemPrompt || DEFAULT_SYSTEM_PROMPT,
+          this.config.workspaceRoot,
+        ),
         temperature: this.agentConfig.temperature,
         maxTokens: this.agentConfig.maxTokens,
         maxTurns: this.config.maxTurns,
@@ -486,7 +513,17 @@ export class AgentRuntime {
   ): Promise<ChatResult> {
     const emit = (e: AgentRuntimeEvent) => onEvent?.(e);
     const provider = createOpenAILLMProvider(this.agentConfig);
-    const messages = buildMessages(this.agentConfig, message, context);
+    const messages = buildMessages(
+      {
+        ...this.agentConfig,
+        systemPrompt: resolveEffectiveSystemPrompt(
+          this.agentConfig.systemPrompt || DEFAULT_SYSTEM_PROMPT,
+          this.config.workspaceRoot,
+        ),
+      },
+      message,
+      context,
+    );
     try {
       const content = await provider.chatStream(messages, (type, text) => {
         emit({ type: type === 'thinking' ? 'thinking' : 'chunk', text });

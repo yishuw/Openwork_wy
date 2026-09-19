@@ -30,6 +30,11 @@ function buildRuntimeConfig(body: Record<string, unknown>, configDir: string, ll
     ? llmGateway.getProvider(providerId)
     : llmGateway.getActiveProvider();
 
+  // 无有效 root 时一律用空串：由工具闸门返回「未打开工作区」，
+  // 禁止回退 process.cwd()（避免误操作开发机目录）。
+  const trimmedRoot = (workspaceRoot || '').trim();
+  const resolvedRoot = trimmedRoot;
+
   return {
     mode,
     provider: {
@@ -40,7 +45,7 @@ function buildRuntimeConfig(body: Record<string, unknown>, configDir: string, ll
     systemPrompt: cfg.systemPrompt,
     temperature: cfg.temperature,
     maxTokens: cfg.maxTokens,
-    workspaceRoot: workspaceRoot || process.cwd(),
+    workspaceRoot: resolvedRoot,
     mcpServers: mode === 'build' ? loadEnabledMcpServers(configDir) : undefined,
     memoryTokenBudget: cfg.memoryTokenBudget ? Number(cfg.memoryTokenBudget) : undefined,
     enableBash: resolveEnableBash(),
@@ -122,14 +127,15 @@ export function createAgentRouter(configDir: string, workspaceManager: Workspace
         }
       }
 
-      // Last resort: create a bare runtime (no restored sessions, no persistence)
-      const fallbackRoot = wsRoot || process.cwd();
+      // Last resort: bare runtime. Root stays empty when unknown — tool gate
+      // returns a friendly error; never fall back to process.cwd().
+      const fallbackRoot = (wsRoot || '').trim();
       const runtime = new AgentRuntime(buildRuntimeConfig(reqBody, configDir, llmGateway, fallbackRoot));
       workspaceManager.cacheRuntime(body.workspaceId, runtime);
       return runtime;
     }
-    // No workspace: create throwaway runtime
-    const wsRoot = workspaceRootOverride || body.workspaceRoot;
+    // No workspace: create throwaway runtime (root empty → tools gated)
+    const wsRoot = ((workspaceRootOverride || body.workspaceRoot) || '').trim();
     return new AgentRuntime(buildRuntimeConfig(reqBody, configDir, llmGateway, wsRoot));
   }
 

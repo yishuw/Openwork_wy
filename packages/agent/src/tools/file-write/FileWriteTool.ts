@@ -4,6 +4,7 @@ import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } fr
 import { createLogger } from '../../logger';
 import { LOG_CATEGORY } from '../../log-categories';
 import { resolveKey } from '../_shared/path';
+import { hasWorkspaceRoot, missingWorkspaceToolError } from '../_shared/workspace-gate';
 import { buildWriteHunk } from '../_shared/file-change';
 import {
   FILE_WRITE_TOOL_NAME,
@@ -42,6 +43,7 @@ export class FileWriteTool implements ITool {
   readonly body = 'content' as const;
 
   async execute(params: Record<string, string>, context: ToolExecutionContext): Promise<string> {
+    if (!hasWorkspaceRoot(context.workspaceRoot)) return missingWorkspaceToolError();
     const startMs = Date.now();
     const target = params.path;
     // body 内容由 parser 注入到 params.content,这里保证它是字符串(空串也是合法)

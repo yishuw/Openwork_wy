@@ -16,30 +16,27 @@
       <span class="b-thinking-text">{{ t('agent.reasoning') }}...</span>
     </div>
 
-    <!-- 引导/空状态 -->
-    <template v-if="showGuide">
+    <!-- 引导：仅在未配置 Provider 时整页拦截 -->
+    <template v-if="!hasProviders">
       <ChatEmptyState
-        v-if="!hasProviders"
         :description="t('agent.guideTitle')"
         :actionLabel="t('agent.addProvider')"
         @action="$emit('open-settings')"
       />
-      <ChatEmptyState
-        v-else-if="!hasWorkspace"
-        :description="t('agent.noWorkspaceDesc')"
-      />
-      <ChatEmptyState
-        v-else-if="!hasSession"
-        :description="t('agent.noSessionPrompt')"
-        :actionLabel="t('agent.newSession')"
-        @action="createNewSession"
-      />
     </template>
 
-    <!-- 正常聊天界面 -->
+    <!-- 正常聊天界面（无工作区也可对话） -->
     <template v-else>
+      <!-- 无工作区时的轻量提示，不阻挡输入 -->
+      <div v-if="!hasWorkspace && visibleMessages.length === 0" class="b-empty-chat">
+        <ChatEmptyState
+          :description="t('agent.noWorkspaceChatHint')"
+          :actionLabel="t('agent.openWorkspace')"
+          @action="$emit('open-folder')"
+        />
+      </div>
       <!-- 消息列表 -->
-      <div v-if="visibleMessages.length === 0" class="b-empty-chat">
+      <div v-else-if="visibleMessages.length === 0" class="b-empty-chat">
         <ChatEmptyState :description="t('agent.emptyChat')" />
       </div>
       <div v-else class="b-messages" ref="messagesContainer">
@@ -50,7 +47,7 @@
         />
       </div>
 
-      <!-- 输入区域 -->
+      <!-- 输入区域：无工作区时仍可发送 -->
       <ChatInputArea
         v-model="input"
         :isProcessing="agentCtrl.isProcessing.value"
@@ -109,6 +106,7 @@ import { webAgentLog } from '../../services/logger';
 
 defineEmits<{
   'open-settings': [];
+  'open-folder': [];
 }>();
 
 const { t } = useI18n();
@@ -126,11 +124,9 @@ const { messages: persistedMessages, refresh: refreshMessages } = useSessionMess
   () => editorStore.workspaceRoot,
 );
 
-// 引导页判定
+// 引导页判定：仅缺 Provider 时整页引导；无工作区不阻止聊天
 const hasProviders = computed(() => providerSettings.providers.value.length > 0);
 const hasWorkspace = computed(() => !!editorStore.activeWorkspaceId || editorStore.workspaceRoots.length > 0);
-const hasSession = computed(() => !!sessionStore.activeSessionId);
-const showGuide = computed(() => !hasProviders.value || !hasWorkspace.value || !hasSession.value);
 
 // 消息列表
 const pendingUserMessage = ref<DisplayMessage | null>(null);

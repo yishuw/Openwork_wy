@@ -230,6 +230,8 @@ export default {
     noSessionPrompt: '点击 + 新建会话以开始对话',
     noWorkspaceTitle: '未打开工作区',
     noWorkspaceDesc: '请先打开一个文件夹，即可开始与 AI Agent 对话并编辑文件。',
+    noWorkspaceChatHint: '当前未打开工作区，仍可直接提问（通用问答）。打开工作区后可使用文件读写工具。',
+    openWorkspace: '打开工作区',
   },
   approval: {
     title: '工具确认',

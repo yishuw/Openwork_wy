@@ -156,7 +156,7 @@
           :class="{ 'agent-dock--full': !showEditorPane }"
           :style="agentDockStyle"
         >
-          <AgentChatB @open-settings="handleOpenSettings('ai')" />
+          <AgentChatB @open-settings="handleOpenSettings('ai')" @open-folder="handleOpenFolder" />
         </div>
       </div>
 

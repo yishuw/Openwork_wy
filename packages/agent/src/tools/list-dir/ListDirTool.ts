@@ -3,6 +3,7 @@ import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } fr
 import { createLogger } from '../../logger';
 import { LOG_CATEGORY } from '../../log-categories';
 import { resolvePath } from '../_shared/path';
+import { hasWorkspaceRoot, missingWorkspaceToolError } from '../_shared/workspace-gate';
 import {
   LIST_DIR_TOOL_NAME,
   LIST_DIR_TOOL_DESCRIPTION,
@@ -32,6 +33,7 @@ export class ListDirTool implements ITool {
   readonly annotations = annotations;
 
   async execute(params: Record<string, string>, context: ToolExecutionContext): Promise<string> {
+    if (!hasWorkspaceRoot(context.workspaceRoot)) return missingWorkspaceToolError();
     const startMs = Date.now();
     try {
       const absPath = resolvePath(context.workspaceRoot, params.path);

@@ -3,6 +3,7 @@ import type { ITool, ToolInputSchema, ToolExecutionContext, ToolAnnotations } fr
 import { createLogger } from '../../logger';
 import { LOG_CATEGORY } from '../../log-categories';
 import { resolvePath, normalizePathKey } from '../_shared/path';
+import { hasWorkspaceRoot, missingWorkspaceToolError } from '../_shared/workspace-gate';
 import {
   FILE_READ_TOOL_NAME,
   FILE_READ_TOOL_DESCRIPTION,
@@ -50,6 +51,7 @@ export class FileReadTool implements ITool {
   readonly annotations = annotations;
 
   async execute(params: Record<string, string>, context: ToolExecutionContext): Promise<string> {
+    if (!hasWorkspaceRoot(context.workspaceRoot)) return missingWorkspaceToolError();
     const startMs = Date.now();
 
     const offset = Math.max(1, parseInt(params.offset || '1', 10) || 1);
