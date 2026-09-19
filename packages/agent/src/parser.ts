@@ -106,11 +106,7 @@ export function parseDsmlToolCalls(text: string, registry: ToolRegistry): Parsed
       const pName = /name\s*=\s*"([^"]+)"/i.exec(pAttrs);
       if (!pName) continue;
       const key = pName[1]!;
-      if (key === 'command' || key === 'path' || key === 'pattern' || key === 'content' || key === 'query') {
-        params[key] = (pm[2] || '').trim();
-      } else {
-        params[key] = (pm[2] || '').trim();
-      }
+      params[key] = (pm[2] || '').trim();
     }
     tools.push({ type: toolName, params });
   }
