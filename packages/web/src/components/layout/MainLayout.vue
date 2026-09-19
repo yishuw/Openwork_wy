@@ -267,7 +267,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { NTabs, NTabPane, NIcon, NButton, NModal, NText } from 'naive-ui';
 import { useEditorStore } from '../../stores/editor';
@@ -304,7 +304,6 @@ import SettingsModal from '../settings/SettingsModal.vue';
 import SearchPopup from '../SearchPopup.vue';
 import OpenFolderDialog from '../dialogs/OpenFolderDialog.vue';
 import OpenFileDialog from '../dialogs/OpenFileDialog.vue';
-import { DocumentOutline, FolderOpenOutline } from '@vicons/ionicons5'
 import { ChatbubblesOutline, HardwareChipOutline } from '@vicons/ionicons5'
 
 const store = useEditorStore();
