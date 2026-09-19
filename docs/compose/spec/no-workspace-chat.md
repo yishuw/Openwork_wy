@@ -3,7 +3,7 @@ feature: no-workspace-chat
 status: delivered
 updated: 2026-09-19
 branch: feature/下一阶段-智能体IDE体验
-commits: 92da5fa..<HEAD
+commits: 92da5fa..591ea4e
 ---
 
 # 无工作区纯聊天
