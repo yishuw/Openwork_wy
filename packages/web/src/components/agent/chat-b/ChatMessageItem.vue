@@ -70,6 +70,8 @@ const MIN_THINKING_CHARS = 12;
 
 const timelineItems = computed<TimelineItem[]>(() => {
   const blocks = props.message.blocks || [];
+  /** 流式过程中不渲染 thinking：避免英文碎片/空壳刷屏；落库刷新后再显示（默认折叠） */
+  const hideThinking = !!props.message.live;
 
   const items: TimelineItem[] = [];
   let pendingId = '';
@@ -77,7 +79,7 @@ const timelineItems = computed<TimelineItem[]>(() => {
 
   const flushThinking = () => {
     const text = pendingContent.trim();
-    if (pendingId && text.length >= MIN_THINKING_CHARS) {
+    if (!hideThinking && pendingId && text.length >= MIN_THINKING_CHARS) {
       const block = {
         id: pendingId,
         type: 'thinking' as const,
@@ -88,7 +90,6 @@ const timelineItems = computed<TimelineItem[]>(() => {
         kind: 'thinking',
         key: pendingId,
         block,
-        // 始终折叠：思考多为英文/碎片，正文才是用户要看的
         expanded: false,
       });
     }
@@ -98,6 +99,7 @@ const timelineItems = computed<TimelineItem[]>(() => {
 
   for (const raw of blocks) {
     if (raw.type === 'thinking') {
+      if (hideThinking) continue;
       const content = ((raw as ThinkingBlock).content || '').trim();
       if (!content) continue;
       if (pendingId) {
