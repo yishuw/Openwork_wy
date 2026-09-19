@@ -45,6 +45,11 @@ export default {
     agent: 'AI Agent',
     mcp: 'MCP Servers',
   },
+  workspaceBar: {
+    title: 'Workspace',
+    open: 'Open',
+    empty: 'No workspace open',
+  },
   activityBar: {
     explorer: 'Explorer (Ctrl+Shift+E)',
     search: 'Search (Ctrl+Shift+F)',

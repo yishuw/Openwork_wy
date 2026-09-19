@@ -45,6 +45,11 @@ export default {
     agent: 'AI 助手',
     mcp: 'MCP 服务器',
   },
+  workspaceBar: {
+    title: '工作区',
+    open: '打开',
+    empty: '尚未打开工作区',
+  },
   activityBar: {
     explorer: '资源管理器 (Ctrl+Shift+E)',
     search: '搜索 (Ctrl+Shift+F)',

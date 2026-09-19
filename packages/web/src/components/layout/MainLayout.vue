@@ -32,6 +32,7 @@
     />
     <div ref="mainContentRef" class="main-content">
       <div v-if="!store.isSingleFile && !sidebarCollapsed" class="sidebar" :style="{ width: sidebarWidth + 'px' }">
+        <WorkspaceBar @open-folder="handleOpenFolder" @select="handleSelectWorkspace" />
         <SideBar
           :title="$t('sidebar.explorer')"
           :sections="sidebarSections"
@@ -63,105 +64,113 @@
         </SideBar>
       </div>
       <div v-if="!store.isSingleFile && !sidebarCollapsed" class="resize-handle" @mousedown="startSidebarResize"></div>
-      <div class="editor-area">
-        <n-tabs
-          v-if="!store.isSingleFile"
-          v-model:value="activeTabValue"
-          type="card"
-          closable
-          tab-style="min-width: 80px; user-select: none;"
-          class="editor-tabs"
-          :pane-style="{ padding: 0, height: '0', overflow: 'hidden' }"
-          @close="handleTabClose"
-        >
-          <n-tab-pane
-            v-for="tab in store.tabs"
-            :key="tab.id"
-            :name="tab.id"
-            display-directive="show"
+      <div class="stage">
+        <!-- 编辑器：仅在打开文件时出现，与 Agent 并排 -->
+        <div v-if="showEditorPane" class="editor-area">
+          <n-tabs
+            v-if="!store.isSingleFile"
+            v-model:value="activeTabValue"
+            type="card"
+            closable
+            tab-style="min-width: 80px; user-select: none;"
+            class="editor-tabs"
+            :pane-style="{ padding: 0, height: '0', overflow: 'hidden' }"
+            @close="handleTabClose"
           >
-            <template #tab>
-              <span>{{ tab.name }}</span>
-              <span v-if="tab.isDirty" class="tab-dirty-indicator">*</span>
-            </template>
-          </n-tab-pane>
-        </n-tabs>
-        <div class="editor-container">
-          <ImageViewer
-            v-if="store.activeTab && store.activeTab.viewMode === 'image'"
-            :src="store.activeTab.content"
-            :filename="store.activeTab.name"
-          />
-          <MonacoEditor
-            v-else-if="store.activeTab && store.activeTab.viewMode === 'code'"
-            :content="store.activeTab.content"
-            :language="store.activeTab.language"
-            @content-change="(c: string) => store.updateContent(store.activeTab!.id, c)"
-          />
-          <DocxViewer
-            v-else-if="store.activeTab && store.activeTab.viewMode === 'docx'"
-            :content="store.activeTab.content"
-            :file-name="store.activeTab.name"
-          />
-          <ExcelViewer
-            v-else-if="store.activeTab && store.activeTab.viewMode === 'excel'"
-            :content="store.activeTab.content"
-            :file-name="store.activeTab.name"
-          />
-          <PptxViewer
-            v-else-if="store.activeTab && store.activeTab.viewMode === 'pptx'"
-            :content="store.activeTab.content"
-            :file-name="store.activeTab.name"
-          />
-          <PdfViewer
-            v-else-if="store.activeTab && store.activeTab.viewMode === 'pdf'"
-            :content="store.activeTab.content"
-            :file-name="store.activeTab.name"
-          />
-          <HtmlViewer
-            v-else-if="store.activeTab && store.activeTab.viewMode === 'html'"
-            :content="store.activeTab.content"
-            :language="store.activeTab.language"
-            @content-change="(c: string) => store.updateContent(store.activeTab!.id, c)"
-          />
-          <MarkdownViewer
-            v-else-if="store.activeTab && store.activeTab.viewMode === 'markdown'"
-            :content="store.activeTab.content"
-            :language="store.activeTab.language"
-            @content-change="(c: string) => store.updateContent(store.activeTab!.id, c)"
-          />
-          <div v-else class="editor-placeholder">
-            <div class="placeholder-content">
-              <p class="placeholder-title">{{ $t('placeholder.title') }}</p>
-              <p class="placeholder-hint">{{ $t('placeholder.hint') }}</p>
-              <div v-if="store.fileTreeNodes.length === 0" class="placeholder-actions">
-                <n-button size="medium" @click="handleOpenFolder">
-                  <template #icon><n-icon :component="FolderOpenOutline" /></template>
-                  {{ $t('placeholder.openFolder') }}
-                </n-button>
-                <n-button
-                  size="medium"
-                  @click="handleOpenFile"
-                >
-                  <template #icon><n-icon :component="DocumentOutline" /></template>
-                  {{ $t('placeholder.openFile') }}
-                </n-button>
+            <n-tab-pane
+              v-for="tab in store.tabs"
+              :key="tab.id"
+              :name="tab.id"
+              display-directive="show"
+            >
+              <template #tab>
+                <span>{{ tab.name }}</span>
+                <span v-if="tab.isDirty" class="tab-dirty-indicator">*</span>
+              </template>
+            </n-tab-pane>
+          </n-tabs>
+          <div class="editor-container">
+            <ImageViewer
+              v-if="store.activeTab && store.activeTab.viewMode === 'image'"
+              :src="store.activeTab.content"
+              :filename="store.activeTab.name"
+            />
+            <MonacoEditor
+              v-else-if="store.activeTab && store.activeTab.viewMode === 'code'"
+              :content="store.activeTab.content"
+              :language="store.activeTab.language"
+              @content-change="(c: string) => store.updateContent(store.activeTab!.id, c)"
+            />
+            <DocxViewer
+              v-else-if="store.activeTab && store.activeTab.viewMode === 'docx'"
+              :content="store.activeTab.content"
+              :file-name="store.activeTab.name"
+            />
+            <ExcelViewer
+              v-else-if="store.activeTab && store.activeTab.viewMode === 'excel'"
+              :content="store.activeTab.content"
+              :file-name="store.activeTab.name"
+            />
+            <PptxViewer
+              v-else-if="store.activeTab && store.activeTab.viewMode === 'pptx'"
+              :content="store.activeTab.content"
+              :file-name="store.activeTab.name"
+            />
+            <PdfViewer
+              v-else-if="store.activeTab && store.activeTab.viewMode === 'pdf'"
+              :content="store.activeTab.content"
+              :file-name="store.activeTab.name"
+            />
+            <HtmlViewer
+              v-else-if="store.activeTab && store.activeTab.viewMode === 'html'"
+              :content="store.activeTab.content"
+              :language="store.activeTab.language"
+              @content-change="(c: string) => store.updateContent(store.activeTab!.id, c)"
+            />
+            <MarkdownViewer
+              v-else-if="store.activeTab && store.activeTab.viewMode === 'markdown'"
+              :content="store.activeTab.content"
+              :language="store.activeTab.language"
+              @content-change="(c: string) => store.updateContent(store.activeTab!.id, c)"
+            />
+            <div v-else class="editor-placeholder">
+              <div class="placeholder-content">
+                <p class="placeholder-title">{{ $t('placeholder.title') }}</p>
+                <p class="placeholder-hint">{{ $t('placeholder.hint') }}</p>
               </div>
             </div>
           </div>
         </div>
-      </div>
-      <div v-if="activeRightPanel" class="right-resize-handle" @mousedown="startRightPanelResize"></div>
-      <div v-if="activeRightPanel" class="right-sidebar" :style="{ width: rightPanelWidth + 'px' }">
-        <template v-if="activeRightPanel === 'agent'">
+
+        <!-- 编辑器与 Agent 并排时的分隔条 -->
+        <div
+          v-if="showEditorPane && showAgentPanel"
+          class="agent-resize-handle"
+          @mousedown="startAgentDockResize"
+        />
+
+        <!-- Agent：无文件时占满主区；有文件时停靠在右侧，可继续对话 -->
+        <div
+          v-if="showAgentPanel"
+          class="agent-dock"
+          :class="{ 'agent-dock--full': !showEditorPane }"
+          :style="agentDockStyle"
+        >
           <AgentChatB @open-settings="handleOpenSettings('ai')" />
-        </template>
-        <McpSettingsPanel v-else-if="activeRightPanel === 'mcp'" />
+        </div>
       </div>
+
+      <!-- MCP 仍走右侧停靠；Agent 已迁入主舞台 -->
+      <template v-if="activeRightPanel === 'mcp'">
+        <div class="right-resize-handle" @mousedown="startRightPanelResize" />
+        <div class="right-sidebar" :style="{ width: rightPanelWidth + 'px' }">
+          <McpSettingsPanel />
+        </div>
+      </template>
       <RightToolbar
         :items="rightToolbarItems"
         :bottom-items="[]"
-        :active-id="activeRightPanel"
+        :active-id="rightToolbarActiveId"
         @select="onRightToolbarSelect"
       />
     </div>
@@ -271,6 +280,7 @@ import Toolbar from '../toolbar/Toolbar.vue';
 import { webFileLog } from '../../services/logger';
 import SideBar from './SideBar.vue';
 import type { SideBarSection } from './SideBar.vue';
+import WorkspaceBar from './WorkspaceBar.vue';
 import GitPanel from '../git/GitPanel.vue';
 import { NewFileTree } from '../new-file-tree';
 import type { ContextMenuPayload } from '../new-file-tree';
@@ -301,20 +311,40 @@ const store = useEditorStore();
 const fs = reactive(useFileSystem());
 const { t } = useI18n();
 
-// ===== 布局状态 =====
+// ===== 布局状态：Agent 优先 =====
 const mainContentRef = ref<HTMLElement | null>(null);
-const activeRightPanel = ref<string | null>('agent');
-const sidebarWidth = ref(260);
+/** 主舞台内是否显示 Agent（默认开，启动即对话主表面） */
+const showAgentPanel = ref(true);
+/** 有编辑器时 Agent 停靠宽度 */
+const agentDockWidth = ref(420);
+const MIN_AGENT_DOCK = 300;
+const MAX_AGENT_DOCK = 720;
+/** MCP 等右侧面板；Agent 已迁入主舞台 */
+const activeRightPanel = ref<string | null>(null);
+const sidebarWidth = ref(240);
 const sidebarCollapsed = ref(false);
-const sidebarSavedWidth = ref(260);
-const rightPanelWidth = ref(0);
-const MIN_EDITOR_WIDTH = 240;
+const sidebarSavedWidth = ref(240);
+const rightPanelWidth = ref(360);
+const MIN_EDITOR_WIDTH = 280;
 const isDraggingFolder = ref(false);
 // Drag events fire as the cursor moves across child elements, so count depth.
 let dragDepth = 0;
 const showSettingsModal = ref(false);
 const showSearchPopup = ref(false);
 const initialSettingsTab = ref('general');
+
+/** 有打开的文件时：编辑器 + Agent 并排；否则 Agent 占满主区 */
+const showEditorPane = computed(() => !!store.activeTab && !store.isSingleFile);
+
+const agentDockStyle = computed(() => {
+  if (!showEditorPane.value) return {};
+  return { width: `${agentDockWidth.value}px`, flex: '0 0 auto' };
+});
+
+const rightToolbarActiveId = computed(() => {
+  if (activeRightPanel.value === 'mcp') return 'mcp';
+  return showAgentPanel.value ? 'agent' : null;
+});
 
 const { renamingPath, creatingInDir, creatingNodeKey, handleConfirmRename, handleConfirmCreate, handleCancelCreate } = useFileTreeContextMenu(fs, store, t, { clearDirState, handleExpandDir });
 
@@ -395,12 +425,49 @@ const rightToolbarItems = computed<RightToolbarItem[]>(() => [
 ]);
 
 function onRightToolbarSelect(id: string) {
-  if (activeRightPanel.value === id) {
-    activeRightPanel.value = null;
-  } else {
-    activeRightPanel.value = id;
-    if (!rightPanelWidth.value) initRightPanelWidth();
+  if (id === 'agent') {
+    showAgentPanel.value = !showAgentPanel.value;
+    if (activeRightPanel.value === 'mcp') activeRightPanel.value = null;
+    return;
   }
+  if (id === 'mcp') {
+    if (activeRightPanel.value === 'mcp') {
+      activeRightPanel.value = null;
+    } else {
+      activeRightPanel.value = 'mcp';
+      if (!rightPanelWidth.value) rightPanelWidth.value = 360;
+    }
+    return;
+  }
+  activeRightPanel.value = id;
+}
+
+/** 左侧工作区列表：把选中项排到首位（当前实现多以单工作区为主） */
+function handleSelectWorkspace(path: string) {
+  const list = store.workspaceRoots;
+  const idx = list.findIndex((r) => r.path === path);
+  if (idx > 0) {
+    const item = list.splice(idx, 1)[0]!;
+    list.unshift(item);
+  }
+}
+
+/** Agent 停靠宽度拖拽 */
+function startAgentDockResize(ev: MouseEvent) {
+  ev.preventDefault();
+  const startWidth = agentDockWidth.value;
+  const startX = ev.clientX;
+  const onMove = (e: MouseEvent) => {
+    const next = startWidth + (startX - e.clientX);
+    const max = Math.min(MAX_AGENT_DOCK, calcRightPanelMax());
+    agentDockWidth.value = Math.max(MIN_AGENT_DOCK, Math.min(max, next));
+  };
+  const onUp = () => {
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+  };
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
 }
 
 function handleGitCommitted() {
@@ -412,43 +479,17 @@ function calcRightPanelMax(): number {
   if (!mainContentRef.value) return 800;
   const total = mainContentRef.value.clientWidth;
   const sidebar = sidebarCollapsed.value ? 0 : sidebarWidth.value + 4;
-  return total - sidebar - MIN_EDITOR_WIDTH - 48;
+  return Math.max(300, total - sidebar - MIN_EDITOR_WIDTH - 48);
 }
-
-/** 初始化右侧面板宽度为剩余空间的一半 */
-function initRightPanelWidth() {
-  if (!mainContentRef.value) {
-    rightPanelWidth.value = 350;
-    return;
-  }
-  const total = mainContentRef.value.clientWidth;
-  const sidebar = sidebarCollapsed.value ? 0 : sidebarWidth.value + 4;
-  const available = total - sidebar - 48;
-  rightPanelWidth.value = Math.round(available / 2);
-}
-
-onMounted(() => {
-  nextTick(() => initRightPanelWidth());
-  window.addEventListener('resize', onWindowResize);
-
-  if (bcChannel) {
-    bcChannel.addEventListener('message', (event) => {
-      const msg = event.data;
-      if (msg?.type === 'CHECK' && msg.path) {
-        if (currentWorkspacePaths.value.includes(msg.path)) {
-          bcChannel.postMessage({ type: 'OPEN', path: msg.path });
-        }
-      }
-    });
-    updateWorkspacePaths();
-  }
-});
 
 function onWindowResize() {
-  if (!activeRightPanel.value || !rightPanelWidth.value) return;
-  const max = calcRightPanelMax();
-  if (rightPanelWidth.value > max) {
-    rightPanelWidth.value = max;
+  if (showEditorPane.value) {
+    const max = calcRightPanelMax();
+    if (agentDockWidth.value > max) agentDockWidth.value = max;
+  }
+  if (activeRightPanel.value === 'mcp' && rightPanelWidth.value) {
+    const max = calcRightPanelMax();
+    if (rightPanelWidth.value > max) rightPanelWidth.value = max;
   }
 }
 
@@ -811,6 +852,7 @@ watch(
 
 // 组件卸载时清理持久化定时器,并立即 flush 当前 tab 状态
 onUnmounted(() => {
+  window.removeEventListener('resize', onWindowResize);
   if (persistTimer) {
     clearTimeout(persistTimer);
     persistTimer = null;
@@ -1047,6 +1089,18 @@ async function handleExpandDir(dirPath: string) {
 }
 
 onMounted(async () => {
+  window.addEventListener('resize', onWindowResize);
+  if (bcChannel) {
+    bcChannel.addEventListener('message', (event) => {
+      const msg = event.data;
+      if (msg?.type === 'CHECK' && msg.path) {
+        if (currentWorkspacePaths.value.includes(msg.path)) {
+          bcChannel.postMessage({ type: 'OPEN', path: msg.path });
+        }
+      }
+    });
+    updateWorkspacePaths();
+  }
   if (window.electronAPI) {
     isMaximized.value = await window.electronAPI.isMaximized();
     window.electronAPI.onMaximizeChange((max: boolean) => {
@@ -1190,8 +1244,15 @@ function startRightPanelResize(e: MouseEvent) {
 .sidebar {
   background: var(--surface-1);
   border-right: 1px solid var(--border-subtle);
-  overflow-y: auto;
+  overflow: hidden;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar :deep(.side-bar) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 .resize-handle {
   width: 4px;
@@ -1202,12 +1263,44 @@ function startRightPanelResize(e: MouseEvent) {
   background: var(--accent);
   opacity: 0.4;
 }
+.stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--app-bg);
+}
 .editor-area {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: var(--surface-2);
+}
+.agent-resize-handle {
+  width: 4px;
+  cursor: col-resize;
+  flex-shrink: 0;
+  background: var(--border-subtle);
+}
+.agent-resize-handle:hover {
+  background: var(--accent);
+  opacity: 0.4;
+}
+.agent-dock {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-1);
+  border-left: 1px solid var(--border-subtle);
+}
+.agent-dock--full {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  border-left: none;
 }
 .editor-tabs {
   flex: 0 0 auto;
