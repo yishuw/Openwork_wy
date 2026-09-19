@@ -104,9 +104,27 @@ export function stripToolMarkup(text: string, toolNames: readonly string[] = COM
   // 运行时注入的工具结果块（展示层不需要；工具卡片已单独展示）
   s = stripToolResultBlocks(s);
 
+  // 流式过程中可能出现「未闭合」的协议标签尾巴，一并去掉
+  s = stripIncompleteMarkupTail(s, toolNames);
+
   s = s.replace(/[ \t]+\n/g, '\n');
   s = s.replace(/\n{3,}/g, '\n\n').trim();
   return s;
+}
+
+/** 去掉字符串末尾未闭合的工具/DSML 标签碎片（流式分片常见） */
+function stripIncompleteMarkupTail(text: string, toolNames: readonly string[]): string {
+  let s = text;
+  // 未闭合 DSML（含后面半截 invoke/parameter 内容）
+  s = s.replace(/<\/?[｜|]*DSML[｜|][^>]*$/i, '');
+  // 未闭合 invoke / calls / parameter
+  s = s.replace(/<\/?(?:invoke|calls|parameter)\b[^>]*$/i, '');
+  // 未闭合的已知工具标签，如 `<list_dir path="..."` 或 `<list_dir /`
+  if (toolNames.length > 0) {
+    const names = toolNames.map(escapeRegExp).join('|');
+    s = s.replace(new RegExp(`<(${names})\\b[^>]*$`, 'i'), '');
+  }
+  return s.replace(/[ \t]+$/g, '');
 }
 
 /** 清洗 thinking：去掉协议标签，保留自然语言推理 */

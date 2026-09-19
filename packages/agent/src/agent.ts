@@ -763,11 +763,20 @@ export class Agent {
 
       // 每轮开始前重置 thinking 累积(每轮独立的 thinking)
       let turnThinking = '';
+      let lastEmittedThinking = '';
 
       const response = await this.provider.chatStream(localMessages, (type, text) => {
         if (type === 'thinking') {
           turnThinking += text;
-          emit({ type: 'thinking', text });
+          // 实时只推送「已清洗」的增量，避免协议标签闪现在思考流里
+          const cleaned = sanitizeThinking(turnThinking, this.tools.getTagNames());
+          if (cleaned.length > lastEmittedThinking.length && cleaned.startsWith(lastEmittedThinking)) {
+            emit({ type: 'thinking', text: cleaned.slice(lastEmittedThinking.length) });
+            lastEmittedThinking = cleaned;
+          } else if (cleaned && cleaned !== lastEmittedThinking) {
+            emit({ type: 'thinking', text: cleaned });
+            lastEmittedThinking = cleaned;
+          }
         } else if (type === 'content') {
           emit({ type: 'chunk', text });
         }

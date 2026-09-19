@@ -87,4 +87,17 @@ describe('sanitize / stripToolMarkup', () => {
     expect(COMMON_TOOL_NAMES).toContain('list_dir');
     expect(COMMON_TOOL_NAMES).toContain('bash');
   });
+
+  it('strips incomplete trailing tool tags during streaming', () => {
+    expect(sanitizeThinking('我来看看。\n<list_dir path="G:\\实验1')).toContain('我来看看');
+    expect(sanitizeThinking('我来看看。\n<list_dir path="G:\\实验1')).not.toContain('<list_dir');
+    expect(sanitizeThinking('继续。\n<｜｜DSML｜｜ invoke name="bash')).not.toContain('DSML');
+    expect(sanitizeThinking('继续。\n<invoke name="list_dir')).not.toContain('<invoke');
+  });
+
+  it('strips incomplete tag then complete tag after more stream chunks', () => {
+    const part1 = '先列目录。\n<list_dir path="';
+    const part2 = 'G:\\x"/>';
+    expect(sanitizeThinking(part1 + part2)).toBe('先列目录。');
+  });
 });

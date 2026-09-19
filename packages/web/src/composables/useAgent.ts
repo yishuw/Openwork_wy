@@ -3,6 +3,7 @@ import { createAgentService } from '../services/agentService';
 import type { AgentConfig, StreamEvent, ApprovalRequiredEvent } from '../services/agentService';
 import type { ProviderConfig } from './useLLMSettings';
 import type { IDESnapshot, DisplayMessage } from '@openwork/agent';
+import { sanitizeThinking, sanitizeDisplayContent } from '@openwork/agent/sanitize';
 import { useEditorStore } from '../stores/editor';
 import { useSettingsStore } from '../stores/settings';
 import { getEditorInstance } from '../services/editorInstance';
@@ -217,16 +218,20 @@ export function useAgent() {
 
     // 内容缓冲(50ms,与旧版一致,降低 markdown 重渲染频率)
     const contentBuffer: string[] = [];
+    let rawResponse = '';
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     const FLUSH_INTERVAL = 50;
     function flushContent() {
       if (contentBuffer.length === 0) return;
       const text = contentBuffer.join('');
       contentBuffer.length = 0;
+      rawResponse += text;
+      // 整段清洗后再展示，避免分片把未闭合标签当成正文
+      const cleaned = sanitizeDisplayContent(rawResponse);
       if (activeBlock && activeBlock.type === 'response') {
-        activeBlock.content += text;
+        activeBlock.content = cleaned;
       }
-      if (liveMessage.value) liveMessage.value.content += text;
+      if (liveMessage.value) liveMessage.value.content = cleaned;
       callbacks.onChunk?.();
     }
     function scheduleFlush() {
@@ -237,6 +242,9 @@ export function useAgent() {
     try {
       const store = useEditorStore();
       const ideSnapshot = buildAgentSnapshot(activeFilePath);
+
+      // 实时 thinking：原始分片单独累积，展示侧每次整体清洗，避免流式标签闪现
+      let rawThinking = '';
 
       await service.streamMessage(
         content,
@@ -251,10 +259,12 @@ export function useAgent() {
           if (!liveMessage.value) return;
           if (type === 'thinking') {
             ensureThinkingBlock();
+            rawThinking += text;
+            const cleanedThinking = sanitizeThinking(rawThinking);
             if (activeBlock && activeBlock.type === 'thinking') {
-              activeBlock.content += text;
+              activeBlock.content = cleanedThinking;
             }
-            liveMessage.value.thinking = (liveMessage.value.thinking || '') + text;
+            liveMessage.value.thinking = cleanedThinking;
           } else {
             ensureResponseBlock();
             contentBuffer.push(text);
