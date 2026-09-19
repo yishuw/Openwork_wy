@@ -186,8 +186,8 @@ export function useAgent() {
       if (activeBlock.type === 'tool_call') activeBlock.completed = true;
       if (activeBlock.type === 'thinking') {
         activeBlock.completed = true;
-        // 空思考块直接丢弃，避免 UI 出现一排「思考过程」空壳
-        if (!(activeBlock.content || '').trim() && liveMessage.value) {
+        // 空/过短思考块直接丢弃
+        if (((activeBlock.content || '').trim().length) < 12 && liveMessage.value) {
           const idx = liveMessage.value.blocks.indexOf(activeBlock);
           if (idx >= 0) liveMessage.value.blocks.splice(idx, 1);
         }
@@ -224,9 +224,11 @@ export function useAgent() {
 
     function pruneEmptyThinkingBlocks() {
       if (!liveMessage.value) return;
-      liveMessage.value.blocks = liveMessage.value.blocks.filter(
-        b => b.type !== 'thinking' || !!(b.content || '').trim(),
-      );
+      liveMessage.value.blocks = liveMessage.value.blocks.filter(b => {
+        if (b.type !== 'thinking') return true;
+        // 过短碎片（英文 "The" 等）不进入 UI
+        return ((b.content || '').trim().length >= 12);
+      });
     }
 
     function startToolCallBlock(toolType: string, toolLabel: string, params: Record<string, string>) {

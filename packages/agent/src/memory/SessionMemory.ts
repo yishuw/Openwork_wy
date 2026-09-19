@@ -322,7 +322,9 @@ export class SessionMemory {
 
         case 'assistant': {
           const blocks: DisplayBlock[] = [];
-          const cleanThinking = entry.thinking ? sanitizeThinking(entry.thinking) : '';
+          let cleanThinking = entry.thinking ? sanitizeThinking(entry.thinking) : '';
+          // 过短思考碎片不进展示，避免英文 "The" 之类噪音
+          if (cleanThinking.trim().length < 12) cleanThinking = '';
           let cleanContent = entry.content ? sanitizeDisplayContent(entry.content) : '';
           // 清洗后正文为空、但 thinking 有内容时，不要让 UI 完全空白：
           // 保留 thinking 块；正文用占位提示（避免用户以为没有输出）

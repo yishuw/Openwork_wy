@@ -62,33 +62,34 @@ type TimelineItem =
 
 /**
  * 按 blocks 原始顺序渲染：
- * - 跳过空思考块
- * - 相邻思考合并为一条，避免流式 thinking_start/end 制造一排空壳
- * - 无正文时默认展开思考
+ * - 跳过空/过短思考碎片（如 "The"）
+ * - 相邻思考合并；思考默认全部折叠，正文才是主信息
+ * - 无正文时才默认展开，避免英文 thinking 抢主视觉
  */
+const MIN_THINKING_CHARS = 12;
+
 const timelineItems = computed<TimelineItem[]>(() => {
   const blocks = props.message.blocks || [];
-  const hasResponse = blocks.some(
-    b => b.type === 'response' && ((b as ResponseBlock).content || '').trim().length > 0,
-  );
 
   const items: TimelineItem[] = [];
   let pendingId = '';
   let pendingContent = '';
 
   const flushThinking = () => {
-    if (pendingId && pendingContent.trim()) {
+    const text = pendingContent.trim();
+    if (pendingId && text.length >= MIN_THINKING_CHARS) {
       const block = {
         id: pendingId,
         type: 'thinking' as const,
-        content: pendingContent.trim(),
+        content: text,
         completed: true,
       } as ThinkingBlock;
       items.push({
         kind: 'thinking',
         key: pendingId,
         block,
-        expanded: !hasResponse,
+        // 始终折叠：思考多为英文/碎片，正文才是用户要看的
+        expanded: false,
       });
     }
     pendingId = '';
