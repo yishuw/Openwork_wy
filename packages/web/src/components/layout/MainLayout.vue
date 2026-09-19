@@ -441,13 +441,16 @@ function onRightToolbarSelect(id: string) {
   activeRightPanel.value = id;
 }
 
-/** 左侧工作区列表：把选中项排到首位（当前实现多以单工作区为主） */
-function handleSelectWorkspace(path: string) {
-  const list = store.workspaceRoots;
-  const idx = list.findIndex((r) => r.path === path);
-  if (idx > 0) {
-    const item = list.splice(idx, 1)[0]!;
-    list.unshift(item);
+/** 左侧工作区列表：点击切换到该工作区（Agent 主界面保持打开） */
+async function handleSelectWorkspace(path: string) {
+  if (!path || path === store.workspaceRoot) return;
+  clearDirState();
+  // 切换后仍以对话为主表面
+  showAgentPanel.value = true;
+  try {
+    await fs.openWorkspaceViaPath(path);
+  } catch (e: any) {
+    webFileLog.error?.(`switch workspace failed: ${e?.message || e}`);
   }
 }
 

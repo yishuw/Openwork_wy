@@ -23,6 +23,9 @@
         <span class="ws-name">{{ root.name || shortPath(root.path) }}</span>
       </button>
     </div>
+    <div v-if="roots.length > 0 && currentPath" class="ws-current" :title="currentPath">
+      {{ shortPath(currentPath) }}
+    </div>
   </div>
 </template>
 
@@ -117,6 +120,14 @@ function shortPath(p: string): string {
   background: var(--accent);
 }
 .ws-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-current {
+  margin-top: 2px;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
