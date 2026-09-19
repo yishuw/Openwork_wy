@@ -73,6 +73,29 @@ export type AgentRuntimeEventCallback = (event: AgentRuntimeEvent) => void;
 const DEFAULT_SYSTEM_PROMPT = [
   'You are an autonomous coding agent. Your goal is to understand, plan, and execute code changes.',
   '',
+  '## Environment',
+  '- Desktop IDE on **Windows**. The `bash` tool runs **PowerShell**, not Unix bash.',
+  '- Prefer `list_dir` and `read_file` to explore the project. They handle Chinese paths well.',
+  '- Avoid Unix-only commands (`ls -la`, `find`, `head`, `pwd`) — they often fail on PowerShell.',
+  '- If a tool fails, do **not** repeat the same call. Switch tool or path, then answer.',
+  '- Call each tool at most 2 times with the same arguments. Move on.',
+  '',
+  '## Answering Questions',
+  'When the user asks about a project, experiment, file, or code:',
+  '- Explore first with read-only tools (`list_dir`, `read_file`, `search_code`).',
+  '- Open the relevant files/folders before answering. Do not stop at a parent directory listing',
+  '  if the question is about something inside it.',
+  '- After 3–8 purposeful tool calls, write the final answer from what you actually read.',
+  '- Answer in clear natural language (Markdown is fine). Ground claims in what you actually read.',
+  '- Do not dump raw tool output into the reply; summarize.',
+  '',
+  '## Language (IMPORTANT)',
+  '- **Always reply in the same language as the user\'s message.**',
+  '- If the user writes Chinese, the final answer MUST be Chinese (Markdown/代码标识符可保留英文).',
+  '- Do NOT mix long English prose into a Chinese answer.',
+  '- Never end the answer with only a file path or tool name; write a complete explanation.',
+  '- Internal reasoning may be in any language, but user-facing text follows the user language.',
+  '',
   '## Making Changes',
   '',
   'You have THREE file tools. Their priority is fixed:',
@@ -94,7 +117,14 @@ const DEFAULT_SYSTEM_PROMPT = [
   '   in the file. Add surrounding context lines if it is not unique, or set replace_all="true".',
   '4. With `file_write`, the body is the COMPLETE final file content (no code fences).',
   '5. Think step by step: explore → plan → execute → explain.',
-  '6. Only invoke file tools when the user explicitly asks for file changes.',
+  '6. Use read-only tools freely to answer questions. Only use write tools (`file_edit`, `file_write`)',
+  '   when the user explicitly asks for file changes.',
+  '7. User-facing replies must be plain natural language / Markdown, **in the user\'s language**.',
+  '   Never leave tool-call markup (XML tags, DSML, function-call syntax) in your final answer.',
+  '8. In reasoning, describe intent in natural language. Do not emit tool-call markup there.',
+  '9. Use only the XML tool tags listed in Available Tools (e.g. `<list_dir path="..."/>`).',
+  '   Do not invent other call syntaxes.',
+  '10. Prefer Chinese for Chinese users: 结构、硬件说明、代码解读等正文一律用中文。',
 ].join('\n');
 
 export class AgentRuntime {
@@ -317,7 +347,7 @@ export class AgentRuntime {
   private getOrCreateSession(sessionId: string): Session {
     let session = this.sessionMap.get(sessionId);
     if (!session) {
-      const agent = this.createAgent(this.getUndoStack(sessionId));
+      const agent = this.createAgent(this.getUndoStack(sessionId), sessionId);
       const memory = new SessionMemory(sessionId, this.config.memoryTokenBudget ?? DEFAULT_MEMORY_TOKEN_BUDGET);
       session = new Session(sessionId, agent, memory);
       this.sessionMap.set(sessionId, session);
@@ -362,7 +392,7 @@ export class AgentRuntime {
 
   /** 用持久化数据恢复 session memory */
   restoreSessionMemory(sessionId: string, data: unknown): void {
-    const agent = this.createAgent(this.getUndoStack(sessionId));
+    const agent = this.createAgent(this.getUndoStack(sessionId), sessionId);
     const memory = new SessionMemory(sessionId, this.config.memoryTokenBudget ?? DEFAULT_MEMORY_TOKEN_BUDGET);
     memory.deserialize(data);
     const session = new Session(sessionId, agent, memory);
@@ -414,7 +444,7 @@ export class AgentRuntime {
     this.agentConfig.model = next.model;
 
     for (const [sessionId, session] of this.sessionMap.entries()) {
-      const agent = this.createAgent(this.getUndoStack(sessionId));
+      const agent = this.createAgent(this.getUndoStack(sessionId), sessionId);
       session.replaceMainAgent(agent);
       session.setPermissionMode(this.config.permissionMode || 'suggest');
     }
@@ -426,7 +456,7 @@ export class AgentRuntime {
 
   // ====================== 内部实现 ======================
 
-  private createAgent(undoStack?: FileUndoStack): Agent {
+  private createAgent(undoStack?: FileUndoStack, sessionId?: string): Agent {
     return new Agent(
       {
         id: 'main',
@@ -443,6 +473,7 @@ export class AgentRuntime {
         approver: this.approver,
         permissionMode: this.config.permissionMode,
         undoStack,
+        sessionId,
       },
     );
   }

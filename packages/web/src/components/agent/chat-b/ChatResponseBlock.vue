@@ -4,13 +4,14 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { sanitizeDisplayContent } from '@openwork/agent/sanitize';
 import { renderMarkdown } from '../../../services/markdown';
 
 const props = defineProps<{
   content: string;
 }>();
 
-const renderedHtml = computed(() => renderMarkdown(props.content));
+const renderedHtml = computed(() => renderMarkdown(sanitizeDisplayContent(props.content || '')));
 </script>
 
 <style scoped>

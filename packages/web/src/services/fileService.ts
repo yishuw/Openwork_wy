@@ -25,6 +25,29 @@ export interface DirectoryBrowseResult {
   truncated: boolean;
 }
 
+/** 从绝对路径构造面包屑（server /browse 不返回 breadcrumbs 时的兜底） */
+function buildBreadcrumbsFromPath(absPath: string): DirectoryEntry[] {
+  const normalized = absPath.replace(/\\/g, '/');
+  const parts = normalized.split('/').filter(Boolean);
+  const crumbs: DirectoryEntry[] = [];
+  if (!normalized.startsWith('/')) {
+    let acc = parts[0] + '/';
+    crumbs.push({ name: acc, path: acc, isDirectory: true });
+    for (const part of parts.slice(1)) {
+      acc = acc.replace(/\/$/, '') + '/' + part;
+      crumbs.push({ name: part, path: acc, isDirectory: true });
+    }
+  } else {
+    crumbs.push({ name: '/', path: '/', isDirectory: true });
+    let p = '';
+    for (const part of parts) {
+      p += '/' + part;
+      crumbs.push({ name: part, path: p, isDirectory: true });
+    }
+  }
+  return crumbs;
+}
+
 /**
  * 文件服务客户端接口
  *
@@ -310,7 +333,7 @@ export function createServerClient(baseUrl = ''): FileServiceClient {
       return {
         path: data.path,
         parent: data.parent,
-        breadcrumbs: [] as DirectoryEntry[],
+        breadcrumbs: buildBreadcrumbsFromPath(data.path),
         entries: data.entries
           .filter((entry) => entry.isDirectory)
           .map((entry) => ({

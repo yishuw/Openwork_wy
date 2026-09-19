@@ -32,6 +32,15 @@ export type { ITool, OpenAIFunctionDefinition, ToolInputSchema, FileChangeMeta, 
 // -- 工具调用解析（编辑能力已下沉为 FileWriteTool / FileEditTool,不再有独立的 edits 路径） --
 export { parseToolCalls, type ParsedTool } from './parser';
 
+// -- 展示清洗（thinking / 回复正文去工具协议噪声） --
+export {
+  stripToolMarkup,
+  stripToolResultBlocks,
+  sanitizeThinking,
+  sanitizeDisplayContent,
+  COMMON_TOOL_NAMES,
+} from './sanitize';
+
 // -- OpenAI function calling 定义 --
 export { toolToOpenAIFunction, sanitizeFunctionName } from './tools/openai-function';
 export {
@@ -93,9 +102,11 @@ export {
   resolvePermissionMode,
   nextApprovalId,
   ApprovalBroker,
+  buildApprovalPreview,
   type PermissionMode,
   type ApprovalDecision,
   type ApprovalRequest,
+  type ApprovalPreview,
   type Approver,
 } from './permission';
 

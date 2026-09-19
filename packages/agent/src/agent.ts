@@ -5,6 +5,7 @@ import type { LLMMessage, ToolCallRecord } from './memory';
 import { ToolRegistry } from './tool-registry';
 import { createDefaultTools } from './tools/index';
 import { parseToolCalls, type ParsedTool } from './parser';
+import { sanitizeThinking, stripToolMarkup } from './sanitize';
 import { createOpenAILLMProvider } from './llm/openai-client';
 import {
   resolveToolProtocol,
@@ -72,6 +73,8 @@ export interface AgentOverrides {
   approver?: Approver;
   permissionMode?: PermissionMode;
   undoStack?: FileUndoStack;
+  /** 会话 ID，用于权限确认 SSE 过滤 */
+  sessionId?: string;
 }
 
 /** 判断是否为取消类错误（不计入 FC 失败降级） */
@@ -115,9 +118,12 @@ export class Agent {
   private permissionMode: PermissionMode;
   private readonly approver?: Approver;
   private readonly undoStack: FileUndoStack;
+  private readonly sessionId?: string;
   /** 运行时实际协议；连续失败后变为 fallback_xml → 之后走 XML */
   private activeProtocol: 'xml' | 'fc' | 'fallback_xml';
   private fcFailStreak = 0;
+  /** 本轮 execute 内最近工具调用 key，用于拦截无意义重复 */
+  private recentToolCalls: string[] = [];
   /**
    * 本 Agent 会话内已 read 过的文件路径集合(规范化绝对路径)。
    * 由 FileReadTool 写入;FileEditTool / FileWriteTool 读取做前置校验。
@@ -154,6 +160,7 @@ export class Agent {
     );
     this.approver = overrides?.approver;
     this.undoStack = overrides?.undoStack ?? new FileUndoStack();
+    this.sessionId = overrides?.sessionId;
     this.workspaceRoot = workspaceRoot;
     this.tools = new ToolRegistry();
     for (const tool of createDefaultTools({ enableBash: config.enableBash })) {
@@ -281,6 +288,7 @@ export class Agent {
       params,
       label,
       mode: this.permissionMode,
+      sessionId: this.sessionId,
     };
 
     log.info(`permission required: ${label}`, {
@@ -335,6 +343,7 @@ export class Agent {
     onToolCall?: ToolCallReportCallback,
     signal?: AbortSignal,
   ): Promise<AgentResult> {
+    this.recentToolCalls = [];
     if (this.effectiveProtocol() === 'fc' && this.provider.chatWithTools) {
       return this.executeWithFunctionCalling(messages, onEvent, onToolCall, signal);
     }
@@ -714,6 +723,7 @@ export class Agent {
     onToolCall?: ToolCallReportCallback,
     signal?: AbortSignal
   ): Promise<AgentResult> {
+    this.recentToolCalls = [];
     if (
       this.effectiveProtocol() === 'fc' &&
       this.provider.chatStreamWithTools
@@ -756,6 +766,8 @@ export class Agent {
 
       const response = await this.provider.chatStream(localMessages, (type, text) => {
         if (type === 'thinking') {
+          // 实时推送模型原始 thinking 分片；展示清洗放在前端/落库侧。
+          // 注意：这里绝不能把「整段 cleaned」当增量反复 emit，否则前端 append 会重复。
           turnThinking += text;
           emit({ type: 'thinking', text });
         } else if (type === 'content') {
@@ -763,8 +775,13 @@ export class Agent {
         }
       }, { signal });
 
-      // 累加 thinking 内容到整轮
-      if (turnThinking) thinkingContent += turnThinking;
+      // 累加 thinking（清洗协议噪声后再入库）
+      if (turnThinking) {
+        const cleanedThinking = sanitizeThinking(turnThinking, this.tools.getTagNames());
+        if (cleanedThinking) {
+          thinkingContent += (thinkingContent ? '\n\n' : '') + cleanedThinking;
+        }
+      }
 
       if (!response) {
         emit({ type: 'done' });
@@ -782,7 +799,11 @@ export class Agent {
       const parsedTools = parseToolCalls(response, this.tools);
 
       if (parsedTools.length > 0) {
-        fullContent += response;
+        // 只把工具标签之外的自然语言写入 content；工具细节由 tool 卡片展示
+        const userText = stripToolMarkup(response, this.tools.getTagNames());
+        if (userText) {
+          fullContent += (fullContent ? '\n\n' : '') + userText;
+        }
 
         for (const tool of parsedTools) {
           toolCalls.push(tool);
@@ -791,6 +812,7 @@ export class Agent {
           const { result, durationMs, fileChanges } = await this.executeToolTimed(tool, signal);
 
           emit({ type: 'tool_result', toolType: tool.type, text: result });
+          // 工具结果仍写入 content，便于调试与单测；展示层会再清洗
           fullContent += `\n\n**[Tool: ${tool.type}]**\n${result}\n`;
           emit({ type: 'tool_end', toolType: tool.type, durationMs, fileChanges });
 
@@ -822,7 +844,17 @@ export class Agent {
         continue;
       }
 
-      fullContent += response;
+      {
+        // 展示正文只保留自然语言；不要把无法解析的工具标记原样入库（否则 UI 会被洗成空白）
+        const cleanedFinal = stripToolMarkup(response, this.tools.getTagNames());
+        if (cleanedFinal) {
+          fullContent += (fullContent ? '\n\n' : '') + cleanedFinal;
+        } else if (response.trim()) {
+          const note = '*[模型回复仅含无法解析的工具标记，已过滤]*';
+          fullContent += (fullContent ? '\n\n' : '') + note;
+          emit({ type: 'chunk', text: note });
+        }
+      }
       // 不再向用户展示「响应过长已截断」——该提示曾误伤正常回复；
       // 内存/落盘侧由 SessionMemory token 滑窗与 maxTurns 控制。
       log.info(`Turn ${turns}/${maxTurns}: final response, ${response.length} chars, ${Date.now() - turnStartMs}ms`, {
@@ -943,10 +975,18 @@ export class Agent {
         }
         throw e;
       }
-      if (turnThinking) thinkingContent += turnThinking;
+      if (turnThinking) {
+        const cleanedThinking = sanitizeThinking(turnThinking, this.tools.getTagNames());
+        if (cleanedThinking) {
+          thinkingContent += (thinkingContent ? '\n\n' : '') + cleanedThinking;
+        }
+      }
 
       if (result.content) {
-        fullContent += result.content;
+        const cleanedContent = stripToolMarkup(result.content, this.tools.getTagNames());
+        if (cleanedContent) {
+          fullContent += (fullContent ? '\n\n' : '') + cleanedContent;
+        }
       }
 
       if (result.toolCalls.length === 0) {
@@ -1088,6 +1128,17 @@ export class Agent {
     if (signal?.aborted) {
       return { result: 'Error: aborted before tool execution', durationMs: 0 };
     }
+
+    // 拦截同参数连续重复调用，避免模型在失败后无限重试刷屏
+    const callKey = `${tool.type}|${JSON.stringify(tool.params)}`;
+    const repeatCount = this.recentToolCalls.filter(k => k === callKey).length;
+    if (repeatCount >= 2) {
+      const result = `Skipped: \`${tool.type}\` with identical arguments was already called ${repeatCount + 1} times. Do not retry. Use another tool/path or write the final answer.`;
+      log.warn(`tool repeat guard: ${tool.type} x${repeatCount + 1}`, { ...this.logBaseMeta(), toolName: tool.type });
+      return { result, durationMs: 0 };
+    }
+    this.recentToolCalls.push(callKey);
+    if (this.recentToolCalls.length > 30) this.recentToolCalls.shift();
 
     const approved = await this.gateApproval(impl, tool.params);
     if (approved !== true) {

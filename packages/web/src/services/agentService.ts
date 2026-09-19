@@ -24,12 +24,24 @@ export interface AgentConfig {
   toolProtocol?: 'xml' | 'fc' | 'auto';
 }
 
+/** SSE 推送的截断预览 */
+export interface ApprovalPreview {
+  path?: string;
+  commandPreview?: string;
+  contentPreview?: string;
+  oldPreview?: string;
+  newPreview?: string;
+  contentLength?: number;
+}
+
 /** 服务端推来的待确认请求 */
 export interface ApprovalRequiredEvent {
   approvalId: string;
   toolName: string;
   label: string;
   mode: string;
+  preview?: ApprovalPreview;
+  sessionId?: string;
 }
 
 /** 对话消息 */
@@ -69,19 +81,20 @@ export interface StreamRequestBody {
 }
 
 export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
-  async function sendApproval(approvalId: string, decision: 'allow' | 'deny'): Promise<void> {
+  async function sendApproval(approvalId: string, decision: 'allow' | 'deny'): Promise<{ success: boolean }> {
     const res = await fetch(`${baseUrl}/api/agent/approval`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approvalId, decision }),
     });
-    if (!res.ok) {
-      webAgentLog.error(`sendApproval failed: ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return { success: data.success === true };
   }
 
   return {
     sendApproval,
+    get baseUrl() { return baseUrl; },
 
     async sendMessage(
       message: string,
@@ -113,8 +126,8 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
       onEvent?: (event: StreamEvent) => void,
       options?: {
         signal?: AbortSignal;
-        /** 收到服务端 approval_required 时回调（异步允许/拒绝） */
-        onApprovalRequired?: (req: ApprovalRequiredEvent) => Promise<'allow' | 'deny'> | 'allow' | 'deny';
+        /** 收到服务端 approval_required 时回调（负责弹窗+POST，返回最终决策） */
+        onApprovalRequired?: (req: ApprovalRequiredEvent) => Promise<'allow' | 'deny'>;
       },
     ): Promise<AgentMessage> {
       const fullBody: StreamRequestBody = {
@@ -169,8 +182,8 @@ export function createAgentService(baseUrl = DEFAULT_BASE_URL) {
 
             if (data.approval_required && options?.onApprovalRequired) {
               const req = data.approval_required as ApprovalRequiredEvent;
-              const decision = await options.onApprovalRequired(req);
-              await sendApproval(req.approvalId, decision);
+              // 回调负责展示弹窗 + POST 到服务端；返回最终决策
+              await options.onApprovalRequired(req);
               continue;
             }
 

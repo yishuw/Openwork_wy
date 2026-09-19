@@ -45,6 +45,20 @@
       <div v-if="error" class="picker-error">{{ error }}</div>
 
       <div class="browser-surface">
+        <div v-if="drives.length > 0" class="drive-sidebar">
+          <div class="drive-header">{{ $t('openDialog.drives') }}</div>
+          <button
+            v-for="drive in drives"
+            :key="drive.path"
+            class="drive-row"
+            :class="{ active: activeDrive === drive.path }"
+            @click="selectDrive(drive.path)"
+          >
+            <n-icon size="16" :component="ServerOutline" />
+            <span class="drive-name">{{ drive.name }}</span>
+          </button>
+        </div>
+        <div v-if="drives.length > 0" class="column-divider"></div>
         <div class="column">
           <div class="column-header">
             <span class="column-title">{{ currentFolderName }}</span>
@@ -161,12 +175,14 @@ import {
   FolderOpenOutline,
   FolderOutline,
   PencilOutline,
+  ServerOutline,
 } from '@vicons/ionicons5';
 import {
   createFileServiceClient,
   type DirectoryEntry,
   type FileServiceClient,
 } from '../../services/fileService';
+import { useEditorStore } from '../../stores/editor';
 
 const { t } = useI18n();
 
@@ -194,6 +210,10 @@ const showHidden = ref(false);
 const editingPath = ref(false);
 const pathInput = ref('');
 const pathInputRef = ref<HTMLInputElement | null>(null);
+
+// 盘符栏
+const drives = ref<DirectoryEntry[]>([]);
+const activeDrive = ref<string | null>(null);
 
 const newFolderVisible = ref(false);
 const newFolderParent = ref<string | null>(null);
@@ -237,6 +257,35 @@ function filterHidden(entries: DirectoryEntry[]): DirectoryEntry[] {
   return entries.filter((entry) => !entry.hidden);
 }
 
+/** 从路径提取所属盘符/根 */
+function getDriveOf(p: string): string {
+  const norm = (p || '').replace(/\\/g, '/');
+  if (!norm) return '';
+  if (norm.startsWith('/')) return '/';
+  return norm.split('/')[0] + '/';
+}
+
+/** 加载可用盘符列表 */
+async function loadDrives() {
+  try {
+    const roots = await client.getWorkspaceRoots();
+    drives.value = roots
+      .filter((r) => r.isDirectory)
+      .map((r) => ({
+        name: r.path === '/' ? '/' : r.path.replace(/\/$/, ''),
+        path: r.path,
+        isDirectory: true as const,
+      }));
+  } catch {
+    drives.value = [];
+  }
+}
+
+function selectDrive(drivePath: string) {
+  activeDrive.value = drivePath;
+  void loadCurrent(drivePath);
+}
+
 async function loadCurrent(path?: string) {
   const requestId = ++currentNavRequest;
   childNavRequest++;
@@ -256,6 +305,7 @@ async function loadCurrent(path?: string) {
     childError.value = '';
     editingPath.value = false;
     pathInput.value = result.path;
+    activeDrive.value = getDriveOf(result.path) || activeDrive.value;
   } catch (err) {
     if (requestId !== currentNavRequest) return;
     error.value = err instanceof Error ? err.message : t('openDialog.permissionDenied');
@@ -313,6 +363,7 @@ function beginEditPath() {
 function submitPath() {
   const input = pathInput.value.trim();
   if (!input) return;
+  activeDrive.value = getDriveOf(input) || activeDrive.value;
   void loadCurrent(input);
 }
 
@@ -389,7 +440,14 @@ function confirm() {
 }
 
 onMounted(() => {
-  void loadCurrent();
+  void loadDrives();
+  try {
+    const store = useEditorStore();
+    const lastRoot = store.workspaceRoots[0]?.path;
+    void loadCurrent(lastRoot || undefined);
+  } catch {
+    void loadCurrent();
+  }
 });
 </script>
 
@@ -528,6 +586,57 @@ onMounted(() => {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+.drive-sidebar {
+  width: 80px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-subtle);
+  overflow-y: auto;
+}
+
+.drive-header {
+  padding: var(--space-2);
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-align: center;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.drive-row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-2) var(--space-1);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.drive-row:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.drive-row.active {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+.drive-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 72px;
 }
 
 .column {

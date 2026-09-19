@@ -3,6 +3,7 @@ import { createAgentService } from '../services/agentService';
 import type { AgentConfig, StreamEvent, ApprovalRequiredEvent } from '../services/agentService';
 import type { ProviderConfig } from './useLLMSettings';
 import type { IDESnapshot, DisplayMessage } from '@openwork/agent';
+import { sanitizeThinking, sanitizeDisplayContent } from '@openwork/agent/sanitize';
 import { useEditorStore } from '../stores/editor';
 import { useSettingsStore } from '../stores/settings';
 import { getEditorInstance } from '../services/editorInstance';
@@ -71,11 +72,14 @@ export function buildAgentSnapshot(activeFilePath?: string): IDESnapshot {
 }
 
 function collectFileTreePaths(entries: any[], basePath: string): string[] {
+  // 目录也要进树：否则 IDE 快照只有根下零星文件（如 keilkill.bat），Agent 会误判项目为空
   const paths: string[] = [];
-  for (const entry of entries) {
-    if (entry.isDirectory) continue;
+  const MAX = 400;
+  for (const entry of entries || []) {
+    if (paths.length >= MAX) break;
+    if (!entry?.name) continue;
     const full = basePath ? `${basePath}/${entry.name}` : entry.name;
-    paths.push(full);
+    paths.push(entry.isDirectory ? `${full}/` : full);
   }
   return paths;
 }
@@ -100,11 +104,9 @@ function collectFileTreePaths(entries: any[], basePath: string): string[] {
 export function useAgent() {
   const isProcessing = ref(false);
   const settings = useSettingsStore();
-  /** 桌面默认：协议 auto、权限 auto-edit（可在设置中改） */
+  /** 桌面默认：协议 auto、权限 auto-edit（可在设置/ChatFooter 中改） */
   const config = ref<AgentConfig>({
     mode: 'build',
-    permissionMode: settings.permissionMode,
-    toolProtocol: settings.toolProtocol,
   });
   const service = createAgentService();
   const liveMessage = ref<DisplayMessage | null>(null);
@@ -128,8 +130,9 @@ export function useAgent() {
       mode: 'build',
       ...config.value,
       providerId: provider?.id || undefined,
-      permissionMode: config.value.permissionMode || settings.permissionMode || 'auto-edit',
-      toolProtocol: config.value.toolProtocol || settings.toolProtocol || 'auto',
+      // 始终从 settings 读取，保证 ChatFooter/设置页切换即时生效
+      permissionMode: settings.permissionMode || 'auto-edit',
+      toolProtocol: settings.toolProtocol || 'auto',
     };
   }
 
@@ -173,13 +176,23 @@ export function useAgent() {
     let blockIdCounter = 0;
     const changedPaths = new Set<string>();
     const nextBlockId = () => `${liveId}_blk${blockIdCounter++}`;
+    /** 整次请求的原始 thinking 分片（liveMessage 汇总用） */
+    let streamRawThinking = '';
+    /** 当前思考块自己的原始分片，避免跨块重复拼接 */
+    let currentBlockRawThinking = '';
 
     function finishBlock() {
-      if (activeBlock) {
-        if (activeBlock.type === 'tool_call') activeBlock.completed = true;
-        if (activeBlock.type === 'thinking') activeBlock.completed = true;
-        activeBlock = null;
+      if (!activeBlock) return;
+      if (activeBlock.type === 'tool_call') activeBlock.completed = true;
+      if (activeBlock.type === 'thinking') {
+        activeBlock.completed = true;
+        // 空/过短思考块直接丢弃
+        if (((activeBlock.content || '').trim().length) < 12 && liveMessage.value) {
+          const idx = liveMessage.value.blocks.indexOf(activeBlock);
+          if (idx >= 0) liveMessage.value.blocks.splice(idx, 1);
+        }
       }
+      activeBlock = null;
     }
 
     function pushBlock(b: LiveBlock) {
@@ -195,8 +208,27 @@ export function useAgent() {
 
     function ensureThinkingBlock() {
       if (activeBlock && activeBlock.type === 'thinking') return;
+      // 若上一个块是空思考，复用它，而不是再新建
+      const blocks = liveMessage.value?.blocks;
+      if (blocks && blocks.length > 0) {
+        const last = blocks[blocks.length - 1];
+        if (last && last.type === 'thinking' && !(last.content || '').trim()) {
+          activeBlock = last;
+          return;
+        }
+      }
       finishBlock();
+      currentBlockRawThinking = '';
       pushBlock({ id: nextBlockId(), type: 'thinking', content: '', completed: false });
+    }
+
+    function pruneEmptyThinkingBlocks() {
+      if (!liveMessage.value) return;
+      liveMessage.value.blocks = liveMessage.value.blocks.filter(b => {
+        if (b.type !== 'thinking') return true;
+        // 过短碎片（英文 "The" 等）不进入 UI
+        return ((b.content || '').trim().length >= 12);
+      });
     }
 
     function startToolCallBlock(toolType: string, toolLabel: string, params: Record<string, string>) {
@@ -215,16 +247,20 @@ export function useAgent() {
 
     // 内容缓冲(50ms,与旧版一致,降低 markdown 重渲染频率)
     const contentBuffer: string[] = [];
+    let rawResponse = '';
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     const FLUSH_INTERVAL = 50;
     function flushContent() {
       if (contentBuffer.length === 0) return;
       const text = contentBuffer.join('');
       contentBuffer.length = 0;
+      rawResponse += text;
+      // 整段清洗后再展示，避免分片把未闭合标签当成正文
+      const cleaned = sanitizeDisplayContent(rawResponse);
       if (activeBlock && activeBlock.type === 'response') {
-        activeBlock.content += text;
+        activeBlock.content = cleaned;
       }
-      if (liveMessage.value) liveMessage.value.content += text;
+      if (liveMessage.value) liveMessage.value.content = cleaned;
       callbacks.onChunk?.();
     }
     function scheduleFlush() {
@@ -249,10 +285,12 @@ export function useAgent() {
           if (!liveMessage.value) return;
           if (type === 'thinking') {
             ensureThinkingBlock();
+            streamRawThinking += text;
+            currentBlockRawThinking += text;
             if (activeBlock && activeBlock.type === 'thinking') {
-              activeBlock.content += text;
+              activeBlock.content = sanitizeThinking(currentBlockRawThinking);
             }
-            liveMessage.value.thinking = (liveMessage.value.thinking || '') + text;
+            liveMessage.value.thinking = sanitizeThinking(streamRawThinking);
           } else {
             ensureResponseBlock();
             contentBuffer.push(text);
@@ -286,7 +324,7 @@ export function useAgent() {
               tc.result = tc.result ? tc.result + resultText : resultText;
             }
           } else if (event.type === 'thinking_start') {
-            ensureThinkingBlock();
+            // 不在此预建思考块：等真正收到 thinking 文本再建，避免空壳
           } else if (event.type === 'thinking_end') {
             finishBlock();
           }
@@ -297,6 +335,7 @@ export function useAgent() {
       // 流正常结束:让 UI 知道 live 消息即将被后端权威数据替代
       flushContent();
       finishBlock();
+      pruneEmptyThinkingBlocks();
       if (changedPaths.size > 0) {
         callbacks.onFilesChanged?.(Array.from(changedPaths));
       }
@@ -316,6 +355,7 @@ export function useAgent() {
       flushContent();
       activeAbortController = null;
       finishBlock();
+      pruneEmptyThinkingBlocks();
       isProcessing.value = false;
       // onDone 触发上层 refresh(从后端拉权威数据覆盖 live)
       // await 确保 refresh 完成后 streamMessage 才真正返回
