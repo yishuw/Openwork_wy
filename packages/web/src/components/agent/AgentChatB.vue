@@ -233,17 +233,22 @@ async function send() {
       onDone: async () => {
         webAgentLog.info('send(B): streamMessage completed, refreshing from backend');
         approvalDialog.cancelAllPending();
+        const liveHadError = !!agentCtrl.liveMessage.value?.error;
         try {
           await refreshMessages();
         } catch (e: any) {
           webAgentLog.warn(`refresh after stream failed: ${e.message}`);
+        }
+        // 流失败时保留 live 错误提示，避免刷新后「没有回复」
+        if (liveHadError && agentCtrl.liveMessage.value?.error) {
+          scheduleScroll(false);
+          return;
         }
         // 后端已有权威消息时再清掉临时态，避免失败瞬间「闪没」
         if (persistedMessages.value.length > 0) {
           pendingUserMessage.value = null;
           agentCtrl.clearLive();
         }
-        // 仅贴底时才跟滚，用户上翻阅读时不拉回底部
         scheduleScroll(false);
       },
       onError: (err) => {

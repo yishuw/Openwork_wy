@@ -14,7 +14,7 @@ commits: 92da5fa..591ea4e
 
 **Verification** — `packages/agent` `npm run build` + `npm test`：**121/121 PASS**（含 `no-workspace-chat.test.ts`）；`packages/server` `npx tsc --noEmit`：**PASS**。评审指出的 cwd 残留与 plan 模式提示词已修复后重跑通过。web `vue-tsc` 仅存量问题（`__SERVER_PORT__`、mode 类型等），与本功能无关。
 
-**Journey log** — 1) 对话本不依赖「已打开文件」，挡输入的是无 Provider/无工作区引导页。2) 产品决策：无工作区可聊天；工具保留但调用报错。3) 评审：`workspaceId` 有值但 root 为空时仍 cwd 兜底并 cache runtime → 已改为永不 cwd。4) plan 模式曾漏用 `resolveEffectiveSystemPrompt` → 已补。5) Workspace 使用当前仓库目录（feature 分支），未新建 linked worktree。
+**Journey log** — 1) 对话本不依赖「已打开文件」，挡输入的是无 Provider/无工作区引导页。2) 产品决策：无工作区可聊天；工具保留但调用报错。3) 评审：`workspaceId` 有值但 root 为空时仍 cwd 兜底并 cache runtime → 已改为永不 cwd。4) plan 模式曾漏用 `resolveEffectiveSystemPrompt` → 已补。5) 真机验证 401 时 UI 无回复 → 补充流错误中文提示与 error 消息渲染，刷新时保留 live 错误。Workspace 使用当前仓库目录。
 
 ## [S1] Problem
 打开软件后 Agent 主界面已默认展示，但未打开工作区时引导页会挡住输入框，用户无法直接提问。需要「无工作区也能纯聊天」：仅依赖已配置的 LLM Provider；文件类工具仍注册，调用时返回友好错误。

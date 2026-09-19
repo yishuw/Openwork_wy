@@ -8,6 +8,7 @@ import { useEditorStore } from '../stores/editor';
 import { useSettingsStore } from '../stores/settings';
 import { getEditorInstance } from '../services/editorInstance';
 import { webAgentLog } from '../services/logger';
+import { formatAgentStreamError } from '../utils/agentErrors';
 
 /**
  * buildAgentSnapshot —— 从当前 IDE 状态构造 IDESnapshot。
@@ -344,11 +345,18 @@ export function useAgent() {
       if (e.name === 'AbortError') {
         if (liveMessage.value) liveMessage.value.content += '\n\n*[已取消]*';
       } else {
+        const friendly = formatAgentStreamError(e);
         if (liveMessage.value) {
           liveMessage.value.error = true;
-          liveMessage.value.content = `Error: ${e.message}`;
+          liveMessage.value.content = friendly;
+          // 保证 UI 一定有可见正文块（否则仅有 thinking 时错误会被吞掉）
+          const errBlockId = `${liveId}_err`;
+          liveMessage.value.blocks = [
+            ...liveMessage.value.blocks.filter(b => b.type !== 'response'),
+            { id: errBlockId, type: 'response', content: friendly },
+          ];
         }
-        callbacks.onError?.(e);
+        callbacks.onError?.(e instanceof Error ? e : new Error(friendly));
       }
     } finally {
       if (flushTimer) clearTimeout(flushTimer);

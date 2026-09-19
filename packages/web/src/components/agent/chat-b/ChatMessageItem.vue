@@ -11,6 +11,13 @@
     <ChatResponseBlock :content="message.content" />
   </n-alert>
 
+  <!-- 流式失败：优先展示错误，避免只看到思考碎片 -->
+  <div v-else-if="message.role === 'assistant' && message.error" class="msg-assistant">
+    <n-alert type="error" class="msg-system" :show-icon="true">
+      {{ message.content || errorFallback }}
+    </n-alert>
+  </div>
+
   <!-- 助手消息：按 blocks 时间轴渲染，思考/工具/正文交错 -->
   <div v-else-if="message.role === 'assistant'" class="msg-assistant">
     <template v-for="item in timelineItems" :key="item.key">
@@ -140,6 +147,7 @@ const showContentFallback = computed(() => {
 });
 
 const fallbackText = '*[无额外正文，详见思考过程]*';
+const errorFallback = '*[Agent 请求失败，请检查设置中的模型密钥或网络]*';
 </script>
 
 <style scoped>
