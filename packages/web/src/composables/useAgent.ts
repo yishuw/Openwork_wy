@@ -182,11 +182,17 @@ export function useAgent() {
     let currentBlockRawThinking = '';
 
     function finishBlock() {
-      if (activeBlock) {
-        if (activeBlock.type === 'tool_call') activeBlock.completed = true;
-        if (activeBlock.type === 'thinking') activeBlock.completed = true;
-        activeBlock = null;
+      if (!activeBlock) return;
+      if (activeBlock.type === 'tool_call') activeBlock.completed = true;
+      if (activeBlock.type === 'thinking') {
+        activeBlock.completed = true;
+        // 空思考块直接丢弃，避免 UI 出现一排「思考过程」空壳
+        if (!(activeBlock.content || '').trim() && liveMessage.value) {
+          const idx = liveMessage.value.blocks.indexOf(activeBlock);
+          if (idx >= 0) liveMessage.value.blocks.splice(idx, 1);
+        }
       }
+      activeBlock = null;
     }
 
     function pushBlock(b: LiveBlock) {
@@ -202,10 +208,25 @@ export function useAgent() {
 
     function ensureThinkingBlock() {
       if (activeBlock && activeBlock.type === 'thinking') return;
+      // 若上一个块是空思考，复用它，而不是再新建
+      const blocks = liveMessage.value?.blocks;
+      if (blocks && blocks.length > 0) {
+        const last = blocks[blocks.length - 1];
+        if (last && last.type === 'thinking' && !(last.content || '').trim()) {
+          activeBlock = last;
+          return;
+        }
+      }
       finishBlock();
-      // 新思考块从空开始，避免把整段历史 thinking 再塞进新块造成重复
       currentBlockRawThinking = '';
       pushBlock({ id: nextBlockId(), type: 'thinking', content: '', completed: false });
+    }
+
+    function pruneEmptyThinkingBlocks() {
+      if (!liveMessage.value) return;
+      liveMessage.value.blocks = liveMessage.value.blocks.filter(
+        b => b.type !== 'thinking' || !!(b.content || '').trim(),
+      );
     }
 
     function startToolCallBlock(toolType: string, toolLabel: string, params: Record<string, string>) {
@@ -301,7 +322,7 @@ export function useAgent() {
               tc.result = tc.result ? tc.result + resultText : resultText;
             }
           } else if (event.type === 'thinking_start') {
-            ensureThinkingBlock();
+            // 不在此预建思考块：等真正收到 thinking 文本再建，避免空壳
           } else if (event.type === 'thinking_end') {
             finishBlock();
           }
@@ -312,6 +333,7 @@ export function useAgent() {
       // 流正常结束:让 UI 知道 live 消息即将被后端权威数据替代
       flushContent();
       finishBlock();
+      pruneEmptyThinkingBlocks();
       if (changedPaths.size > 0) {
         callbacks.onFilesChanged?.(Array.from(changedPaths));
       }
@@ -331,6 +353,7 @@ export function useAgent() {
       flushContent();
       activeAbortController = null;
       finishBlock();
+      pruneEmptyThinkingBlocks();
       isProcessing.value = false;
       // onDone 触发上层 refresh(从后端拉权威数据覆盖 live)
       // await 确保 refresh 完成后 streamMessage 才真正返回

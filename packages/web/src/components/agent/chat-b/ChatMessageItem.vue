@@ -11,30 +11,24 @@
     <ChatResponseBlock :content="message.content" />
   </n-alert>
 
-  <!-- 助手消息 -->
+  <!-- 助手消息：按 blocks 时间轴渲染，思考/工具/正文交错 -->
   <div v-else-if="message.role === 'assistant'" class="msg-assistant">
-    <!-- 思考块: 无正文时默认展开，避免「看起来没有输出」 -->
-    <n-collapse
-      v-if="thinkingBlocks.length > 0"
-      :default-expanded-names="defaultThinkingNames"
-    >
-      <ChatThinkingBlock
-        v-for="block in thinkingBlocks"
-        :key="block.id"
-        :block="block"
+    <template v-for="item in timelineItems" :key="item.key">
+      <n-collapse
+        v-if="item.kind === 'thinking'"
+        :default-expanded-names="item.expanded ? [item.block.id] : []"
+      >
+        <ChatThinkingBlock :block="item.block" />
+      </n-collapse>
+      <ChatToolBlock
+        v-else-if="item.kind === 'tool'"
+        :block="item.block"
       />
-    </n-collapse>
-    <!-- 工具调用: 单行简讯, 不折叠 -->
-    <ChatToolBlock
-      v-for="block in toolBlocks"
-      :key="block.id"
-      :block="block"
-    />
-    <!-- 回复块: 正文 -->
-    <div v-for="block in responseBlocks" :key="block.id" class="msg-response-wrapper">
-      <ChatResponseBlock :content="block.content" />
-    </div>
-    <!-- 兜底: blocks 缺失/为空时仍展示 content，避免整条消息空白 -->
+      <div v-else class="msg-response-wrapper">
+        <ChatResponseBlock :content="item.block.content" />
+      </div>
+    </template>
+    <!-- 兜底: blocks 缺失/为空时仍展示 content -->
     <div
       v-if="showContentFallback"
       class="msg-response-wrapper msg-fallback"
@@ -48,6 +42,7 @@
 import { computed } from 'vue';
 import { NCollapse, NAlert } from 'naive-ui';
 import type { DisplayMessage, DisplayBlock } from '@openwork/agent';
+import { sanitizeDisplayContent } from '@openwork/agent/sanitize';
 import ChatThinkingBlock from './ChatThinkingBlock.vue';
 import ChatToolBlock from './ChatToolBlock.vue';
 import ChatResponseBlock from './ChatResponseBlock.vue';
@@ -56,24 +51,87 @@ const props = defineProps<{
   message: DisplayMessage;
 }>();
 
-const thinkingBlocks = computed(() =>
-  (props.message.blocks || []).filter(b => b.type === 'thinking') as (DisplayBlock & { type: 'thinking' })[]
-);
-const toolBlocks = computed(() =>
-  (props.message.blocks || []).filter(b => b.type === 'tool_call') as (DisplayBlock & { type: 'tool_call' })[]
-);
-const responseBlocks = computed(() =>
-  (props.message.blocks || []).filter(b => b.type === 'response') as (DisplayBlock & { type: 'response' })[]
-);
+type ThinkingBlock = DisplayBlock & { type: 'thinking'; content: string };
+type ToolBlock = DisplayBlock & { type: 'tool_call' };
+type ResponseBlock = DisplayBlock & { type: 'response'; content: string };
 
-/** 无正文时默认展开思考，让用户至少能看到模型在做什么 */
-const defaultThinkingNames = computed(() => {
-  if (responseBlocks.value.length > 0) return [];
-  return thinkingBlocks.value.map(b => b.id);
+type TimelineItem =
+  | { kind: 'thinking'; key: string; block: ThinkingBlock; expanded: boolean }
+  | { kind: 'tool'; key: string; block: ToolBlock }
+  | { kind: 'response'; key: string; block: ResponseBlock };
+
+/**
+ * 按 blocks 原始顺序渲染：
+ * - 跳过空思考块
+ * - 相邻思考合并为一条，避免流式 thinking_start/end 制造一排空壳
+ * - 无正文时默认展开思考
+ */
+const timelineItems = computed<TimelineItem[]>(() => {
+  const blocks = props.message.blocks || [];
+  const hasResponse = blocks.some(
+    b => b.type === 'response' && ((b as ResponseBlock).content || '').trim().length > 0,
+  );
+
+  const items: TimelineItem[] = [];
+  let pendingId = '';
+  let pendingContent = '';
+
+  const flushThinking = () => {
+    if (pendingId && pendingContent.trim()) {
+      const block = {
+        id: pendingId,
+        type: 'thinking' as const,
+        content: pendingContent.trim(),
+        completed: true,
+      } as ThinkingBlock;
+      items.push({
+        kind: 'thinking',
+        key: pendingId,
+        block,
+        expanded: !hasResponse,
+      });
+    }
+    pendingId = '';
+    pendingContent = '';
+  };
+
+  for (const raw of blocks) {
+    if (raw.type === 'thinking') {
+      const content = ((raw as ThinkingBlock).content || '').trim();
+      if (!content) continue;
+      if (pendingId) {
+        pendingContent = `${pendingContent.trim()}\n\n${content}`.trim();
+      } else {
+        pendingId = raw.id;
+        pendingContent = content;
+      }
+      continue;
+    }
+
+    flushThinking();
+
+    if (raw.type === 'tool_call') {
+      items.push({ kind: 'tool', key: raw.id, block: raw as ToolBlock });
+    } else if (raw.type === 'response') {
+      const b = raw as ResponseBlock;
+      const content = sanitizeDisplayContent(b.content || '');
+      if (content.trim()) {
+        items.push({
+          kind: 'response',
+          key: b.id,
+          block: { ...b, content } as ResponseBlock,
+        });
+      }
+    }
+  }
+  flushThinking();
+
+  return items;
 });
 
 const showContentFallback = computed(() => {
-  if (responseBlocks.value.length > 0) return false;
+  if (timelineItems.value.some(i => i.kind === 'response')) return false;
+  if (timelineItems.value.some(i => i.kind === 'thinking' || i.kind === 'tool')) return false;
   const c = (props.message.content || '').trim();
   return c.length > 0;
 });
